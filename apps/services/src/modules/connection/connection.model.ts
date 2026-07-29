@@ -1,5 +1,6 @@
 import type { DatasourceType, EntityStatus } from '../../types';
 import { paginationRules } from '../../types';
+import type { ConnectionRecord } from '../../services/sqlite';
 
 export interface ConnectionItem {
   id: string;
@@ -76,19 +77,18 @@ export const connectionListQueryRules = {
   ...paginationRules
 };
 
-export function stubConnection(overrides: Partial<ConnectionItem> = {}): ConnectionItem {
-  const now = new Date().toISOString();
+/** Map a DB record to API response (never expose password_enc / app_id). */
+export function toConnectionItem(record: ConnectionRecord): ConnectionItem {
   return {
-    id: 'stub-connection-id',
-    name: 'stub-connection',
-    type: 'mysql',
-    host: '127.0.0.1',
-    port: 3306,
-    username: 'root',
-    database: 'demo',
-    status: 'active',
-    created_at: now,
-    updated_at: now,
-    ...overrides
+    id: record.id,
+    name: record.name,
+    type: record.type,
+    host: record.host,
+    port: record.port,
+    username: record.username,
+    database: record.database,
+    status: record.status,
+    created_at: record.created_at,
+    updated_at: record.updated_at
   };
 }

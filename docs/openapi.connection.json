@@ -1,0 +1,724 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "sql2api Connections API",
+    "description": "数据库连接管理模块接口（MySQL / PostgreSQL）。所有业务接口需 Bearer Api-Key 鉴权。",
+    "version": "0.0.1"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:13334",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Connections",
+      "description": "目标数据库连接的 CRUD 与连通性测试"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/connections": {
+      "post": {
+        "tags": ["Connections"],
+        "summary": "创建数据库连接",
+        "operationId": "createConnection",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConnectionBody"
+              },
+              "example": {
+                "name": "local-mysql",
+                "type": "mysql",
+                "host": "127.0.0.1",
+                "port": 13306,
+                "username": "root",
+                "password": "your-password",
+                "database": "demo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      },
+      "get": {
+        "tags": ["Connections"],
+        "summary": "连接列表",
+        "operationId": "listConnections",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "页码，从 1 开始"
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "每页条数"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "按连接名称模糊搜索"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "列表成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/connections/{id}": {
+      "get": {
+        "tags": ["Connections"],
+        "summary": "连接详情",
+        "operationId": "getConnection",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "详情成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionItemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Connections"],
+        "summary": "更新连接",
+        "operationId": "updateConnection",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConnectionBody"
+              },
+              "example": {
+                "host": "10.0.0.1",
+                "status": "active"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Connections"],
+        "summary": "删除连接",
+        "operationId": "deleteConnection",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedResponse"
+                },
+                "example": {
+                  "request_id": "15c0343e-3a70-5f1a-bcd4-9bdb9d4a29af",
+                  "timestamp": 1785313868758,
+                  "code": "200",
+                  "message": "Success",
+                  "data": {
+                    "id": "bebb53ad-0ead-4719-a5f2-012b5529e75f",
+                    "deleted": true
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/connections/{id}/test": {
+      "post": {
+        "tags": ["Connections"],
+        "summary": "测试连接连通性",
+        "description": "对已保存的连接发起 SELECT 1 探测。失败时仍返回 HTTP 200，data.ok=false。",
+        "operationId": "testConnection",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "测试完成（ok 可能为 true 或 false）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestConnectionResponse"
+                },
+                "examples": {
+                  "ok": {
+                    "summary": "连通成功",
+                    "value": {
+                      "request_id": "08195604-c9db-57ad-a9ae-5d6a18bc48dc",
+                      "timestamp": 1785313868713,
+                      "code": "200",
+                      "message": "Success",
+                      "data": {
+                        "ok": true,
+                        "message": "Connected",
+                        "latency_ms": 12
+                      }
+                    }
+                  },
+                  "failed": {
+                    "summary": "连通失败",
+                    "value": {
+                      "request_id": "52760728-5864-54b2-ba98-db625bffa456",
+                      "timestamp": 1785315046741,
+                      "code": "200",
+                      "message": "Success",
+                      "data": {
+                        "ok": false,
+                        "message": "Datasource Error: connect ECONNREFUSED 127.0.0.1:13306",
+                        "latency_ms": 4
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "ApiKey",
+        "description": "Authorization: Bearer <api-key>。通过 `sql2api apikey create` 生成，明文仅展示一次。"
+      }
+    },
+    "parameters": {
+      "ConnectionId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "连接 UUID"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "参数校验失败",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "request_id": "be4649a4-f3fe-5cbc-b775-dc4c6d1d68c7",
+              "timestamp": 1785313868726,
+              "code": "400",
+              "message": "The name field is required.",
+              "data": {}
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "缺少或无效的 Api-Key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "request_id": "be4649a4-f3fe-5cbc-b775-dc4c6d1d68c7",
+              "timestamp": 1785313868726,
+              "code": "401",
+              "message": "Unauthorized",
+              "data": {}
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "连接不存在或不属于当前应用",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "request_id": "cc40f821-5564-558a-b386-33ee6c496e81",
+              "timestamp": 1785315046767,
+              "code": "404",
+              "message": "Not Found",
+              "data": {}
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "同名连接已存在（应用内唯一）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ConflictEnvelope"
+            },
+            "example": {
+              "request_id": "62469832-1bde-548c-8d9d-ba68f32bc165",
+              "timestamp": 1785315046640,
+              "code": "409",
+              "message": "Data Already Exists",
+              "data": {
+                "name": "local-mysql"
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApiEnvelopeBase": {
+        "type": "object",
+        "required": ["request_id", "timestamp", "code", "message", "data"],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "description": "毫秒时间戳"
+          },
+          "code": {
+            "type": "string",
+            "description": "状态码字符串，如 \"200\" / \"401\""
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "ErrorEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        ]
+      },
+      "ConflictEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "409"
+              },
+              "message": {
+                "type": "string",
+                "example": "Data Already Exists"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "DatasourceType": {
+        "type": "string",
+        "enum": ["mysql", "postgresql"]
+      },
+      "EntityStatus": {
+        "type": "string",
+        "enum": ["active", "disabled"]
+      },
+      "CreateConnectionBody": {
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "host",
+          "port",
+          "username",
+          "password",
+          "database"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "连接名称，应用内唯一"
+          },
+          "type": {
+            "$ref": "#/components/schemas/DatasourceType"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "description": "明文密码，服务端 AES-256-GCM 加密存储，响应中永不回传"
+          },
+          "database": {
+            "type": "string",
+            "description": "目标库名"
+          }
+        }
+      },
+      "UpdateConnectionBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "type": {
+            "$ref": "#/components/schemas/DatasourceType"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          },
+          "database": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EntityStatus"
+          }
+        }
+      },
+      "ConnectionItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "host",
+          "port",
+          "username",
+          "database",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/DatasourceType"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          },
+          "database": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EntityStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConnectionListData": {
+        "type": "object",
+        "required": ["list", "total", "page", "size"],
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "TestConnectionData": {
+        "type": "object",
+        "required": ["ok"],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "DeletedData": {
+        "type": "object",
+        "required": ["id", "deleted"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deleted": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        }
+      },
+      "ConnectionItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ConnectionItem"
+              }
+            }
+          }
+        ]
+      },
+      "ConnectionListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ConnectionListData"
+              }
+            }
+          }
+        ]
+      },
+      "TestConnectionResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/TestConnectionData"
+              }
+            }
+          }
+        ]
+      },
+      "DeletedResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/DeletedData"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
