@@ -4,6 +4,9 @@
   "private": true,
   "description": "sql2api monorepo managed by pnpm workspaces",
   "packageManager": "pnpm@11.10.0",
+  "bin": {
+    "sql2api": "./bin/sql2api.js"
+  },
   "engines": {
     "node": ">=20",
     "pnpm": ">=9"
