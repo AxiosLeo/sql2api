@@ -3,6 +3,9 @@ runtimes/
 runtime/
 .DS_Store
 
+# Local GGUF models (downloaded via scripts/download-model.sh)
+models/
+
 # IDEA
 .idea/
 
