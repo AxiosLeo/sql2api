@@ -1,0 +1,59 @@
+# sql2api local test databases
+# Usage:
+#   cp .env.example .env   # optional; defaults work for local
+#   docker compose up -d
+#   docker compose ps
+
+services:
+  postgres:
+    image: docker.m.daocloud.io/postgres:16-alpine
+    container_name: sql2api-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eagle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eagle_dev_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-eagle}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/db-init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: docker.m.daocloud.io/mysql:8
+    container_name: sql2api-mysql
+    hostname: mysql
+    command: >
+      mysqld
+      --authentication-policy=caching_sha2_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=256M
+      --max_connections=1000
+      --bind-address=0.0.0.0
+      --skip-name-resolve
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASS:-sql2api_dev_pass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-main_db}
+      TZ: Asia/Shanghai
+    restart: unless-stopped
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/db-init/mysql:/docker-entrypoint-initdb.d:ro
+    ports:
+      - '${MYSQL_PORT:-33306}:3306'
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uroot', '-p${MYSQL_PASS:-sql2api_dev_pass}']
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 40s
+
+volumes:
+  postgres-data:
+  mysql_data:
