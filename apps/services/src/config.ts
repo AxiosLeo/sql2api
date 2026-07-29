@@ -8,6 +8,12 @@ export default {
       web_public: process.env.APP_WEB_PUBLIC || '../web/dist',
       api_port: process.env.API_PORT ? parseInt(process.env.API_PORT) : 13334
     },
+    sqlite: {
+      path: process.env.SQLITE_PATH || './data/sql2api.db'
+    },
+    ai: {
+      model_path: process.env.LLAMA_MODEL_PATH || ''
+    },
     mysql: {
       host: process.env.MYSQL_HOST || 'localhost',
       port: process.env.MYSQL_PORT ? parseInt(process.env.MYSQL_PORT) : 13306,

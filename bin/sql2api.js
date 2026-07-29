@@ -13,7 +13,7 @@ const app = new App({
   version: '0.0.0',
   desc: 'sql2api cli tools',
   commands_dir: path.join(__dirname, '../packages/commands'),
-  commands_sort: ['help']
+  commands_sort: ['app', 'apikey', 'help']
 });
 
 app.start();

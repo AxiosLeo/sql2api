@@ -2,6 +2,7 @@ packages:
   - "packages/*"
   - "apps/*"
 allowBuilds:
-  '@swc/core': set this to true or false
-  es5-ext: set this to true or false
+  '@swc/core': true
+  es5-ext: true
   node-llama-cpp: true
+  better-sqlite3: true
