@@ -1,0 +1,678 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "sql2api Models API",
+    "description": "数据模型管理模块：从表结构批量生成模型定义，供 AI 生成 SQL 时作为上下文。所有业务接口需 Bearer Api-Key 鉴权。",
+    "version": "0.0.1"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:13334",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Models",
+      "description": "目标库表列表、批量生成模型定义、模型 CRUD 与同步"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/connections/{connection_id}/tables": {
+      "get": {
+        "tags": ["Models"],
+        "summary": "获取目标库表列表",
+        "operationId": "listTables",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "表列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TablesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/DatasourceError"
+          }
+        }
+      }
+    },
+    "/api/connections/{connection_id}/models/generate": {
+      "post": {
+        "tags": ["Models"],
+        "summary": "批量生成模型定义",
+        "description": "从表结构批量生成模型。`all=true` 与非空 `tables` 二选一。目标库中不存在的表名会出现在 `skipped`。",
+        "operationId": "generateModels",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateModelsBody"
+              },
+              "examples": {
+                "byTables": {
+                  "summary": "指定表名",
+                  "value": {
+                    "tables": ["users", "orders"]
+                  }
+                },
+                "all": {
+                  "summary": "全选",
+                  "value": {
+                    "all": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "生成结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateModelsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/DatasourceError"
+          }
+        }
+      }
+    },
+    "/api/models": {
+      "get": {
+        "tags": ["Models"],
+        "summary": "模型列表",
+        "operationId": "listModels",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "按表名模糊搜索"
+          },
+          {
+            "name": "connection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "按连接过滤"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/models/{id}": {
+      "get": {
+        "tags": ["Models"],
+        "summary": "模型详情",
+        "operationId": "getModel",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ModelId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelItemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Models"],
+        "summary": "删除模型",
+        "operationId": "deleteModel",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ModelId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/models/{id}/sync": {
+      "post": {
+        "tags": ["Models"],
+        "summary": "重新同步表结构",
+        "description": "从目标库重新拉取该模型对应表的列定义并更新。",
+        "operationId": "syncModel",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ModelId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "同步成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelItemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/DatasourceError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "ApiKey",
+        "description": "Authorization: Bearer <api-key>"
+      }
+    },
+    "parameters": {
+      "ConnectionId": {
+        "name": "connection_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "数据库连接 UUID"
+      },
+      "ModelId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "模型 UUID"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "参数校验失败或缺少 all/tables",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "request_id": "be4649a4-f3fe-5cbc-b775-dc4c6d1d68c7",
+              "timestamp": 1785313868726,
+              "code": "400",
+              "message": "Either \"all\" or non-empty \"tables\" is required",
+              "data": {}
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "缺少或无效的 Api-Key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "request_id": "be4649a4-f3fe-5cbc-b775-dc4c6d1d68c7",
+              "timestamp": 1785313868726,
+              "code": "401",
+              "message": "Unauthorized",
+              "data": {}
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "连接/模型不存在，或不属于当前应用；sync 时表已删除则为 Table Not Found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "request_id": "cc40f821-5564-558a-b386-33ee6c496e81",
+              "timestamp": 1785315046767,
+              "code": "404",
+              "message": "Not Found",
+              "data": {}
+            }
+          }
+        }
+      },
+      "DatasourceError": {
+        "description": "目标数据库不可达或查询失败",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "request_id": "52760728-5864-54b2-ba98-db625bffa456",
+              "timestamp": 1785315046741,
+              "code": "502",
+              "message": "Datasource Error: connect ECONNREFUSED 127.0.0.1:33306",
+              "data": {}
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApiEnvelopeBase": {
+        "type": "object",
+        "required": ["request_id", "timestamp", "code", "message", "data"],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "ErrorEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        ]
+      },
+      "GenerateModelsBody": {
+        "type": "object",
+        "properties": {
+          "tables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "要生成模型的表名列表"
+          },
+          "all": {
+            "type": "boolean",
+            "description": "为 true 时对该连接下全部表生成模型"
+          }
+        }
+      },
+      "ColumnDefinition": {
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "nullable",
+          "default",
+          "comment",
+          "is_primary",
+          "is_auto_increment"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "列类型，如 BIGINT / varchar"
+          },
+          "nullable": {
+            "type": "boolean"
+          },
+          "default": {
+            "type": "string",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string"
+          },
+          "is_primary": {
+            "type": "boolean"
+          },
+          "is_auto_increment": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ModelDefinition": {
+        "type": "object",
+        "required": [
+          "id",
+          "connection_id",
+          "table_name",
+          "comment",
+          "columns",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "table_name": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ColumnDefinition"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TableInfo": {
+        "type": "object",
+        "required": ["name", "comment"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          }
+        }
+      },
+      "TablesData": {
+        "type": "object",
+        "required": ["tables"],
+        "properties": {
+          "tables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TableInfo"
+            }
+          }
+        }
+      },
+      "GenerateModelsData": {
+        "type": "object",
+        "required": ["generated", "skipped"],
+        "properties": {
+          "generated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelDefinition"
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "目标库中不存在的表名"
+          }
+        }
+      },
+      "ModelListData": {
+        "type": "object",
+        "required": ["list", "total", "page", "size"],
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelDefinition"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "DeletedData": {
+        "type": "object",
+        "required": ["id", "deleted"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deleted": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        }
+      },
+      "TablesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/TablesData"
+              }
+            }
+          }
+        ]
+      },
+      "GenerateModelsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/GenerateModelsData"
+              }
+            }
+          }
+        ]
+      },
+      "ModelListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ModelListData"
+              }
+            }
+          }
+        ]
+      },
+      "ModelItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ModelDefinition"
+              }
+            }
+          }
+        ]
+      },
+      "DeletedResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/DeletedData"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

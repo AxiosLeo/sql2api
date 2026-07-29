@@ -1,5 +1,6 @@
 import type { ColumnDefinition } from '../../types';
 import { paginationRules } from '../../types';
+import type { ModelRecord } from '../../services/sqlite';
 
 export interface ModelDefinition {
   id: string;
@@ -51,35 +52,15 @@ export const modelListQueryRules = {
   connection_id: 'string'
 };
 
-export function stubModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
-  const now = new Date().toISOString();
+/** Map a DB record to API response (parse columns_json). */
+export function toModelItem(record: ModelRecord): ModelDefinition {
   return {
-    id: 'stub-model-id',
-    connection_id: 'stub-connection-id',
-    table_name: 'users',
-    comment: 'Stub users table',
-    columns: [
-      {
-        name: 'id',
-        type: 'BIGINT',
-        nullable: false,
-        default: null,
-        comment: 'Primary key',
-        is_primary: true,
-        is_auto_increment: true
-      },
-      {
-        name: 'name',
-        type: 'VARCHAR(64)',
-        nullable: false,
-        default: null,
-        comment: 'Display name',
-        is_primary: false,
-        is_auto_increment: false
-      }
-    ],
-    created_at: now,
-    updated_at: now,
-    ...overrides
+    id: record.id,
+    connection_id: record.connection_id,
+    table_name: record.table_name,
+    comment: record.comment,
+    columns: JSON.parse(record.columns_json || '[]') as ColumnDefinition[],
+    created_at: record.created_at,
+    updated_at: record.updated_at
   };
 }
