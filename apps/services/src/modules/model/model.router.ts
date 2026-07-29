@@ -26,7 +26,7 @@ router.add(connectionScoped);
 // Top-level /models
 const models = new Router('/models');
 
-models.get('/', (ctx) => controller.list(ctx), {
+models.get('', (ctx) => controller.list(ctx), {
   query: { rules: modelListQueryRules }
 });
 

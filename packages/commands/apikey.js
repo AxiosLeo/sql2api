@@ -1,17 +1,29 @@
 'use strict';
 
-const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
 const { Command, printer } = require('@axiosleo/cli-tool');
+
+function loadSqlite() {
+  const distPath = path.join(__dirname, '../../apps/services/dist/services/sqlite.js');
+  if (!fs.existsSync(distPath)) {
+    throw new Error(
+      'Services build not found. Run: pnpm --filter sql2spi-services run build'
+    );
+  }
+  const envPath = path.join(__dirname, '../../apps/services/.env');
+  require('dotenv').config({ path: envPath });
+  return require(distPath);
+}
 
 /**
  * Api-Key management for an application.
  * Usage:
  *   sql2api apikey create --app <app_id> [--name "default"]
  *   sql2api apikey list --app <app_id>
- *   sql2api apikey revoke --app <app_id> --name <key_name>
+ *   sql2api apikey revoke --id <key_id>
  *
  * Key format: sk2a_<40 hex chars>. Only shown in plaintext once on create.
- * Stub: prints generated key; real SHA-256 storage lands later.
  */
 class ApiKeyCommand extends Command {
   constructor() {
@@ -20,51 +32,78 @@ class ApiKeyCommand extends Command {
       desc: 'Manage application Api-Keys (create / list / revoke)'
     });
     this.addArgument('action', 'Action: create | list | revoke', 'required', null);
-    this.addOption('app', 'a', 'Application id', 'required', null);
-    this.addOption('name', 'n', 'Api-Key name', 'optional', 'default');
+    this.addOption('app', 'a', 'Application id', 'optional', null);
+    this.addOption('name', 'n', 'Api-Key name (create)', 'optional', 'default');
+    this.addOption('id', 'i', 'Api-Key id (revoke)', 'optional', null);
   }
 
   /**
    * @param {{ action: string }} args
-   * @param {{ app: string, name?: string }} options
+   * @param {{ app?: string, name?: string, id?: string }} options
    */
   async exec(args, options) {
     const action = (args.action || '').toLowerCase();
-    const appId = options.app;
-    const name = options.name || 'default';
-
-    if (!appId) {
-      printer.red('Error: --app is required').println();
+    let sqlite;
+    try {
+      sqlite = loadSqlite();
+    } catch (err) {
+      printer.red(err.message).println();
       return;
     }
 
     switch (action) {
       case 'create': {
-        const token = `sk2a_${crypto.randomBytes(20).toString('hex')}`;
-        const prefix = token.slice(0, 12);
-        const hash = crypto.createHash('sha256').update(token).digest('hex');
-
-        printer.green('Api-Key created (stub)').println();
-        printer.println(`  app:    ${appId}`);
-        printer.println(`  name:   ${name}`);
-        printer.println(`  prefix: ${prefix}`);
-        printer.println(`  hash:   ${hash.slice(0, 16)}…`);
-        printer.yellow('  token (shown once): ').print(token).println();
-        printer.warning('Store this token securely. It will not be shown again.');
+        if (!options.app) {
+          printer.red('Error: --app is required for create').println();
+          return;
+        }
+        try {
+          const { record, token } = sqlite.createApiKey(options.app, options.name || 'default');
+          printer.green('Api-Key created').println();
+          printer.println(`  id:     ${record.id}`);
+          printer.println(`  app:    ${record.app_id}`);
+          printer.println(`  name:   ${record.name}`);
+          printer.println(`  prefix: ${record.prefix}`);
+          printer.yellow('  token (shown once): ').print(token).println();
+          printer.warning('Store this token securely. It will not be shown again.');
+        } catch (err) {
+          printer.red(`Error: ${err.message}`).println();
+        }
         break;
       }
       case 'list': {
-        printer.yellow(`Api-Keys for app ${appId} (stub):`).println();
-        printer.println('  stub-key-id  default  sk2a_stub…  active');
+        if (!options.app) {
+          printer.red('Error: --app is required for list').println();
+          return;
+        }
+        const keys = sqlite.listApiKeys(options.app);
+        if (!keys.length) {
+          printer.yellow(`No Api-Keys for app ${options.app}.`).println();
+          return;
+        }
+        printer.yellow(`Api-Keys for app ${options.app} (${keys.length}):`).println();
+        for (const key of keys) {
+          const last = key.last_used_at || '-';
+          printer.println(`  ${key.id}  ${key.name}  ${key.prefix}…  ${key.status}  last_used=${last}`);
+        }
         break;
       }
       case 'revoke': {
-        printer.yellow(`Revoke Api-Key "${name}" for app ${appId}? (stub — not revoked)`).println();
+        if (!options.id) {
+          printer.red('Error: --id is required for revoke').println();
+          return;
+        }
+        const ok = sqlite.revokeApiKey(options.id);
+        if (!ok) {
+          printer.red(`Error: Api-Key ${options.id} not found`).println();
+          return;
+        }
+        printer.green(`Api-Key ${options.id} revoked`).println();
         break;
       }
       default:
         printer.red(`Unknown action: ${action}`).println();
-        printer.println('Usage: sql2api apikey <create|list|revoke> --app <app_id> [--name <name>]');
+        printer.println('Usage: sql2api apikey <create|list|revoke> [--app <app_id>] [--name <name>] [--id <key_id>]');
     }
   }
 }

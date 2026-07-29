@@ -9,11 +9,11 @@ import {
 
 const router = new Router('/connections');
 
-router.post('/', (ctx) => controller.create(ctx), {
+router.post('', (ctx) => controller.create(ctx), {
   body: { rules: createConnectionRules }
 });
 
-router.get('/', (ctx) => controller.list(ctx), {
+router.get('', (ctx) => controller.list(ctx), {
   query: { rules: connectionListQueryRules }
 });
 

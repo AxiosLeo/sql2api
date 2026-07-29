@@ -6,6 +6,9 @@ runtime/
 # Local GGUF models (downloaded via scripts/download-model.sh)
 models/
 
+# SQLite business database
+data/
+
 # IDEA
 .idea/
 

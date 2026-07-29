@@ -11,7 +11,7 @@ import {
 
 const router = new Router('/sqls');
 
-router.post('/', (ctx) => controller.create(ctx), {
+router.post('', (ctx) => controller.create(ctx), {
   body: { rules: createSqlRules }
 });
 
@@ -23,7 +23,7 @@ router.post('/review', (ctx) => controller.review(ctx), {
   body: { rules: reviewSqlRules }
 });
 
-router.get('/', (ctx) => controller.list(ctx), {
+router.get('', (ctx) => controller.list(ctx), {
   query: { rules: sqlListQueryRules }
 });
 

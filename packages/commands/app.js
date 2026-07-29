@@ -1,15 +1,28 @@
 'use strict';
 
+const path = require('path');
+const fs = require('fs');
 const { Command, printer } = require('@axiosleo/cli-tool');
+
+function loadSqlite() {
+  const distPath = path.join(__dirname, '../../apps/services/dist/services/sqlite.js');
+  if (!fs.existsSync(distPath)) {
+    throw new Error(
+      'Services build not found. Run: pnpm --filter sql2spi-services run build'
+    );
+  }
+  // Load apps/services/.env so APP_SECRET / SQLITE_PATH match the API process.
+  const envPath = path.join(__dirname, '../../apps/services/.env');
+  require('dotenv').config({ path: envPath });
+  return require(distPath);
+}
 
 /**
  * Application management: create / list / remove apps.
  * Usage:
  *   sql2api app create --name my-app [--desc "..."]
  *   sql2api app list
- *   sql2api app remove --name my-app
- *
- * Stub: prints planned actions. Real SQLite persistence lands later.
+ *   sql2api app remove --name my-app --yes
  */
 class AppCommand extends Command {
   constructor() {
@@ -20,14 +33,22 @@ class AppCommand extends Command {
     this.addArgument('action', 'Action: create | list | remove', 'required', null);
     this.addOption('name', 'n', 'Application name', 'optional', null);
     this.addOption('desc', 'd', 'Application description', 'optional', '');
+    this.addOption('yes', 'y', 'Confirm destructive action', 'optional', false);
   }
 
   /**
    * @param {{ action: string }} args
-   * @param {{ name?: string, desc?: string }} options
+   * @param {{ name?: string, desc?: string, yes?: boolean|string }} options
    */
   async exec(args, options) {
     const action = (args.action || '').toLowerCase();
+    let sqlite;
+    try {
+      sqlite = loadSqlite();
+    } catch (err) {
+      printer.red(err.message).println();
+      return;
+    }
 
     switch (action) {
       case 'create': {
@@ -35,16 +56,33 @@ class AppCommand extends Command {
           printer.red('Error: --name is required for create').println();
           return;
         }
-        const stubId = 'stub-app-id';
-        printer.green('Application created (stub)').println();
-        printer.println(`  id:   ${stubId}`);
-        printer.println(`  name: ${options.name}`);
-        printer.println(`  desc: ${options.desc || ''}`);
+        try {
+          const existing = sqlite.getAppByName(options.name);
+          if (existing) {
+            printer.red(`Error: application "${options.name}" already exists (${existing.id})`).println();
+            return;
+          }
+          const app = sqlite.createApp(options.name, options.desc || '');
+          printer.green('Application created').println();
+          printer.println(`  id:     ${app.id}`);
+          printer.println(`  name:   ${app.name}`);
+          printer.println(`  desc:   ${app.description}`);
+          printer.println(`  status: ${app.status}`);
+        } catch (err) {
+          printer.red(`Error: ${err.message}`).println();
+        }
         break;
       }
       case 'list': {
-        printer.yellow('Applications (stub):').println();
-        printer.println('  stub-app-id  stub-app  active');
+        const apps = sqlite.listApps();
+        if (!apps.length) {
+          printer.yellow('No applications found.').println();
+          return;
+        }
+        printer.yellow(`Applications (${apps.length}):`).println();
+        for (const app of apps) {
+          printer.println(`  ${app.id}  ${app.name}  ${app.status}`);
+        }
         break;
       }
       case 'remove': {
@@ -52,13 +90,23 @@ class AppCommand extends Command {
           printer.red('Error: --name is required for remove').println();
           return;
         }
-        printer.yellow(`Remove application "${options.name}"? (stub — not deleted)`).println();
-        printer.println('  Confirm interactively in a later iteration.');
+        const confirmed = options.yes === true || options.yes === 'true' || options.yes === '1';
+        if (!confirmed) {
+          printer.red('Error: pass --yes to confirm deletion').println();
+          return;
+        }
+        const app = sqlite.getAppByName(options.name);
+        if (!app) {
+          printer.red(`Error: application "${options.name}" not found`).println();
+          return;
+        }
+        sqlite.removeApp(app.id);
+        printer.green(`Application "${app.name}" (${app.id}) removed`).println();
         break;
       }
       default:
         printer.red(`Unknown action: ${action}`).println();
-        printer.println('Usage: sql2api app <create|list|remove> [--name <name>] [--desc <desc>]');
+        printer.println('Usage: sql2api app <create|list|remove> [--name <name>] [--desc <desc>] [--yes]');
     }
   }
 }

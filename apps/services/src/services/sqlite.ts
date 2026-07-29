@@ -236,9 +236,24 @@ function newId(): string {
   return crypto.randomUUID();
 }
 
+/** Default DB path anchored to package root (apps/services/data/sql2api.db).
+ * Works for both src/services and dist/services (same depth). */
+const DEFAULT_DB_PATH = path.resolve(__dirname, '../../data/sql2api.db');
+
 function resolveDbPath(): string {
-  const raw = process.env.SQLITE_PATH || config.envs.sqlite.path;
-  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+  const raw = process.env.SQLITE_PATH;
+  if (raw) {
+    return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+  }
+  // Prefer package-anchored default so CLI (repo root) and service share one file.
+  // config.envs.sqlite.path is only used when it differs from the relative default.
+  const configured = config.envs.sqlite.path;
+  if (configured && configured !== './data/sql2api.db') {
+    return path.isAbsolute(configured)
+      ? configured
+      : path.resolve(process.cwd(), configured);
+  }
+  return DEFAULT_DB_PATH;
 }
 
 function getSecretKey(): Buffer {
