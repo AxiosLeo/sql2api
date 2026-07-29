@@ -1,0 +1,26 @@
+{
+  "name": "sql2api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "sql2api monorepo managed by pnpm workspaces",
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "clean": "pnpm -r run clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@axiosleo/cli-tool": "^1.6.12",
+    "@axiosleo/koapp": "^1.2.1",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0"
+  }
+}
