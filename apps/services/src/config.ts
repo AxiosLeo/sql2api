@@ -6,7 +6,8 @@ export default {
     deploy: process.env.DEPLOY_ENV || 'local',
     app: {
       web_public: process.env.APP_WEB_PUBLIC || '../web/dist',
-      api_port: process.env.API_PORT ? parseInt(process.env.API_PORT) : 13334
+      api_port: process.env.API_PORT ? parseInt(process.env.API_PORT) : 13334,
+      secret: process.env.APP_SECRET || 'sql2api-dev-secret-change-me'
     },
     sqlite: {
       path: process.env.SQLITE_PATH || './data/sql2api.db'
