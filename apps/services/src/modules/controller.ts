@@ -13,4 +13,12 @@ export class BaseController extends Controller {
     }
     return appId!;
   }
+
+  protected isUniqueConstraintError(err: unknown): boolean {
+    if (!err || typeof err !== 'object') {
+      return false;
+    }
+    const code = (err as { code?: string }).code || '';
+    return code.startsWith('SQLITE_CONSTRAINT');
+  }
 }

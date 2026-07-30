@@ -1,8 +1,10 @@
 import type { KoaContext } from '@axiosleo/koapp';
 import Validator from 'validatorjs';
 import { BaseController } from '../controller';
-import { stubSql } from '../sql/sql.model';
-import type { HttpMethod } from '../../types';
+import { toSqlItem } from '../sql/sql.model';
+import type { HttpMethod, SqlParamDef } from '../../types';
+import { getConnectionConfig, getSql } from '../../services/sqlite';
+import { execute, query } from '../../services/datasource';
 
 export interface InvokeSelectResult {
   rows: Record<string, unknown>[];
@@ -23,9 +25,15 @@ const METHOD_PARAM_SOURCE: Record<HttpMethod, 'query' | 'body'> = {
 
 export class InvokeController extends BaseController {
   async invoke(context: KoaContext) {
+    const appId = this.appId(context);
     const uuid = context.params?.uuid || '';
-    // Stub: look up registered SQL by uuid + app_id
-    const sql = stubSql({ id: uuid });
+
+    const record = getSql(appId, uuid);
+    if (!record) {
+      this.error(404, 'Not Found SQL');
+    }
+
+    const sql = toSqlItem(record!);
 
     if (sql.status === 'disabled') {
       this.error(403, 'Not Authorized');
@@ -41,17 +49,20 @@ export class InvokeController extends BaseController {
     }
 
     const source = METHOD_PARAM_SOURCE[sql.method];
-    const data: Record<string, unknown> = source === 'query'
-      ? (context.query as Record<string, unknown>) || {}
-      : (context.body as Record<string, unknown>) || {};
+    const raw: Record<string, unknown> = source === 'query'
+      ? { ...((context.query as Record<string, unknown>) || {}) }
+      : { ...((context.body as Record<string, unknown>) || {}) };
 
-    // Apply defaults then validate with stored validatorjs rules
+    // Collect only declared params; apply defaults; validate with stored rules
+    const data: Record<string, unknown> = {};
     const rules: Record<string, string> = {};
-    for (const param of sql.params) {
-      rules[param.name] = param.rule;
-      if (data[param.name] === undefined && param.default !== undefined) {
+    for (const param of sql.params as SqlParamDef[]) {
+      if (raw[param.name] !== undefined) {
+        data[param.name] = raw[param.name];
+      } else if (param.default !== undefined) {
         data[param.name] = param.default;
       }
+      rules[param.name] = param.rule;
     }
 
     if (Object.keys(rules).length > 0) {
@@ -65,20 +76,26 @@ export class InvokeController extends BaseController {
       }
     }
 
-    // Stub execution — real mysql2 / pg path lands later
-    if (sql.sql_type === 'select') {
-      const result: InvokeSelectResult = {
-        rows: [{ id: 1, name: 'stub' }],
-        row_count: 1
-      };
-      this.success(result);
+    const config = getConnectionConfig(appId, record!.connection_id);
+    if (!config) {
+      this.error(404, 'Not Found Connection');
     }
 
-    const result: InvokeWriteResult = {
-      affected_rows: 1,
-      insert_id: sql.sql_type === 'insert' ? 1 : undefined
+    if (sql.sql_type === 'select') {
+      const result = await query(config!, record!.sql_text, data);
+      const payload: InvokeSelectResult = {
+        rows: result.rows,
+        row_count: result.row_count
+      };
+      this.success(payload);
+    }
+
+    const execResult = await execute(config!, record!.sql_text, data);
+    const payload: InvokeWriteResult = {
+      affected_rows: execResult.affected_rows,
+      insert_id: execResult.insert_id
     };
-    this.success(result);
+    this.success(payload);
   }
 }
 

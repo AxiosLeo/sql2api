@@ -11,9 +11,9 @@
     "build": "tsc -p tsconfig.prod.json && tsc-alias -p tsconfig.prod.json",
     "start": "DEPLOY_ENV=prod && npm run build && node ./dist/src/bootstrap.js",
     "dev": "nodemon",
-    "test": "mocha -r @swc-node/register src/**/*.test.ts",
+    "test": "mocha -r @swc-node/register 'src/**/*.test.ts'",
     "test-one": "NODE_ENV=test mocha -r @swc-node/register --exit",
-    "test-cov": "nyc mocha -r @swc-node/register src/**/*.test.ts --parallel"
+    "test-cov": "nyc mocha -r @swc-node/register 'src/**/*.test.ts' --parallel"
   },
   "engines": {
     "node": ">=16.0.0"

@@ -1,0 +1,500 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "sql2api Invoke API",
+    "description": "按已注册 SQL 的 uuid 动态校验参数并在目标库执行。请求 HTTP method 必须与注册时映射的 method 一致（SELECT→GET、INSERT→POST、UPDATE→PATCH、DELETE→DELETE）。GET/DELETE 参数取自 query；POST/PATCH 参数取自 body。所有业务接口需 Bearer Api-Key 鉴权。",
+    "version": "0.0.1"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:13334",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Invoke",
+      "description": "执行已注册的 SQL API"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/invoke/{uuid}": {
+      "get": {
+        "tags": ["Invoke"],
+        "summary": "调用 SELECT 类 SQL（GET）",
+        "description": "仅当注册 SQL 的 method 为 GET 时允许。参数来自 query，仅收集声明的 params。",
+        "operationId": "invokeGet",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InvokeUuid"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "示例：声明的命名参数之一（实际参数名以注册时 params 为准）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvokeSelectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadData"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Invoke"],
+        "summary": "调用 INSERT 类 SQL（POST）",
+        "description": "仅当注册 SQL 的 method 为 POST 时允许。参数来自 JSON body 自由对象。",
+        "operationId": "invokePost",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InvokeUuid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "example": {
+                "name": "Alice",
+                "email": "alice@example.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "写操作成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvokeWriteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadData"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Invoke"],
+        "summary": "调用 UPDATE 类 SQL（PATCH）",
+        "description": "仅当注册 SQL 的 method 为 PATCH 时允许。参数来自 JSON body。",
+        "operationId": "invokePatch",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InvokeUuid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "example": {
+                "id": 1,
+                "name": "Alice Updated"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "写操作成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvokeWriteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadData"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Invoke"],
+        "summary": "调用 DELETE 类 SQL（DELETE）",
+        "description": "仅当注册 SQL 的 method 为 DELETE 时允许。参数来自 query。",
+        "operationId": "invokeDelete",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InvokeUuid"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "示例：声明的命名参数之一"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "写操作成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvokeWriteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadData"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "ApiKey",
+        "description": "Authorization: Bearer <api-key>。通过 `sql2api apikey create` 生成，明文仅展示一次。"
+      }
+    },
+    "parameters": {
+      "InvokeUuid": {
+        "name": "uuid",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "已注册 SQL 的 id（uuid）"
+      }
+    },
+    "responses": {
+      "BadData": {
+        "description": "参数校验失败",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationErrorResponse"
+            },
+            "example": {
+              "request_id": "req_xxx",
+              "timestamp": 1710000000000,
+              "code": "400",
+              "message": "Bad Data",
+              "data": {
+                "errors": {
+                  "id": ["The id field is required."]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "未鉴权或 Api-Key 无效",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "SQL 已禁用（status=disabled）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "SQL 或关联连接不存在",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "MethodNotAllowed": {
+        "description": "HTTP method 与注册 SQL 的 method 不一致",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MethodNotAllowedResponse"
+            },
+            "example": {
+              "request_id": "req_xxx",
+              "timestamp": 1710000000000,
+              "code": "405",
+              "message": "Method Not Allowed",
+              "data": {
+                "expected": "GET",
+                "actual": "POST"
+              }
+            }
+          }
+        }
+      },
+      "BadGateway": {
+        "description": "目标数据库执行失败",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApiEnvelopeBase": {
+        "type": "object",
+        "required": ["request_id", "timestamp", "code", "message", "data"],
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "ErrorEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        ]
+      },
+      "InvokeSelectData": {
+        "type": "object",
+        "required": ["rows", "row_count"],
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "row_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "InvokeWriteData": {
+        "type": "object",
+        "required": ["affected_rows"],
+        "properties": {
+          "affected_rows": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "insert_id": {
+            "type": "integer",
+            "description": "INSERT 时可选返回"
+          }
+        }
+      },
+      "InvokeSelectResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/InvokeSelectData"
+              }
+            }
+          }
+        ]
+      },
+      "InvokeWriteResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/InvokeWriteData"
+              }
+            }
+          }
+        ]
+      },
+      "ValidationErrorResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": ["errors"],
+                "properties": {
+                  "errors": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MethodNotAllowedResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": ["expected", "actual"],
+                "properties": {
+                  "expected": {
+                    "type": "string",
+                    "enum": ["GET", "POST", "PATCH", "DELETE"]
+                  },
+                  "actual": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

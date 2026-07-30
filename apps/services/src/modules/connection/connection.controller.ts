@@ -16,14 +16,6 @@ import {
 } from '../../services/sqlite';
 import { testConnection } from '../../services/datasource';
 
-function isUniqueConstraintError(err: unknown): boolean {
-  if (!err || typeof err !== 'object') {
-    return false;
-  }
-  const code = (err as { code?: string }).code || '';
-  return code.startsWith('SQLITE_CONSTRAINT');
-}
-
 export class ConnectionController extends BaseController {
   async create(context: KoaContext) {
     const appId = this.appId(context);
@@ -42,7 +34,7 @@ export class ConnectionController extends BaseController {
       });
       this.success(toConnectionItem(record));
     } catch (err) {
-      if (isUniqueConstraintError(err)) {
+      if (this.isUniqueConstraintError(err)) {
         this.failed({ name: body.name }, '409;Data Already Exists', 409);
       }
       throw err;
@@ -92,7 +84,7 @@ export class ConnectionController extends BaseController {
       }
       this.success(toConnectionItem(record!));
     } catch (err) {
-      if (isUniqueConstraintError(err)) {
+      if (this.isUniqueConstraintError(err)) {
         this.failed({ name: body.name }, '409;Data Already Exists', 409);
       }
       throw err;
