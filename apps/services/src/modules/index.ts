@@ -1,9 +1,12 @@
 import { Router, error, success } from '@axiosleo/koapp';
 import { authMiddleware } from '../middlewares/auth';
+import { adminAuthMiddleware } from '../middlewares/admin-auth';
+import adminRouter from './admin/admin.router';
+import appRouter from './app/app.router';
 import connectionRouter from './connection/connection.router';
+import invokeRouter from './invoke/invoke.router';
 import modelRouter from './model/model.router';
 import sqlRouter from './sql/sql.router';
-import invokeRouter from './invoke/invoke.router';
 
 const defaultHandler = {
   method: 'any',
@@ -12,16 +15,10 @@ const defaultHandler = {
   }]
 };
 
-const root = new Router('/api', {
+/** External OpenAPI surface — Bearer Api-Key, scoped by app_id. */
+const root = new Router('/openapi', {
   ...defaultHandler,
   middlewares: [authMiddleware]
-});
-
-// Health check — mounted without auth by registering before auth-scoped routes
-// via a sibling router that shares the /api prefix.
-const publicRoot = new Router('/api');
-publicRoot.get('/health', async () => {
-  success({ status: 'ok' });
 });
 
 root.add(connectionRouter);
@@ -30,4 +27,27 @@ root.add(sqlRouter);
 root.add(invokeRouter);
 root.new('/***', defaultHandler);
 
-export default [publicRoot, root];
+/** Admin console API — session cookie auth. */
+const adminApi = new Router('/api', {
+  ...defaultHandler
+});
+
+// Public admin routes (login / logout / profile)
+adminApi.add(adminRouter);
+
+// Authenticated admin routes
+const logged = new Router('', { middlewares: [adminAuthMiddleware] });
+logged.add(appRouter);
+logged.add(connectionRouter);
+logged.add(modelRouter);
+logged.add(sqlRouter);
+logged.add(invokeRouter);
+adminApi.add(logged);
+
+/** Public health under /api (no auth). */
+const publicRoot = new Router('/api');
+publicRoot.get('/health', async () => {
+  success({ status: 'ok' });
+});
+
+export default [publicRoot, root, adminApi];

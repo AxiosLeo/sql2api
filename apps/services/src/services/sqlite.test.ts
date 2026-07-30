@@ -51,7 +51,7 @@ describe('sqlite service', function () {
     assert.strictEqual(app.status, 'active');
 
     const apps = listApps();
-    assert.ok(apps.some((a) => a.id === app.id));
+    assert.ok(apps.list.some((a) => a.id === app.id));
   });
 
   it('creates api key and resolves it', async () => {

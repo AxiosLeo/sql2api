@@ -23,12 +23,18 @@
     }
   ],
   "paths": {
-    "/api/connections/{connection_id}/tables": {
+    "/openapi/connections/{connection_id}/tables": {
       "get": {
-        "tags": ["Models"],
+        "tags": [
+          "Models"
+        ],
         "summary": "获取目标库表列表",
         "operationId": "listTables",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ConnectionId"
@@ -57,13 +63,19 @@
         }
       }
     },
-    "/api/connections/{connection_id}/models/generate": {
+    "/openapi/connections/{connection_id}/models/generate": {
       "post": {
-        "tags": ["Models"],
+        "tags": [
+          "Models"
+        ],
         "summary": "批量生成模型定义",
         "description": "从表结构批量生成模型。`all=true` 与非空 `tables` 二选一。目标库中不存在的表名会出现在 `skipped`。",
         "operationId": "generateModels",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ConnectionId"
@@ -80,7 +92,10 @@
                 "byTables": {
                   "summary": "指定表名",
                   "value": {
-                    "tables": ["users", "orders"]
+                    "tables": [
+                      "users",
+                      "orders"
+                    ]
                   }
                 },
                 "all": {
@@ -119,12 +134,18 @@
         }
       }
     },
-    "/api/models": {
+    "/openapi/models": {
       "get": {
-        "tags": ["Models"],
+        "tags": [
+          "Models"
+        ],
         "summary": "模型列表",
         "operationId": "listModels",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -187,12 +208,18 @@
         }
       }
     },
-    "/api/models/{id}": {
+    "/openapi/models/{id}": {
       "get": {
-        "tags": ["Models"],
+        "tags": [
+          "Models"
+        ],
         "summary": "模型详情",
         "operationId": "getModel",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ModelId"
@@ -218,10 +245,16 @@
         }
       },
       "delete": {
-        "tags": ["Models"],
+        "tags": [
+          "Models"
+        ],
         "summary": "删除模型",
         "operationId": "deleteModel",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ModelId"
@@ -247,13 +280,19 @@
         }
       }
     },
-    "/api/models/{id}/sync": {
+    "/openapi/models/{id}/sync": {
       "post": {
-        "tags": ["Models"],
+        "tags": [
+          "Models"
+        ],
         "summary": "重新同步表结构",
         "description": "从目标库重新拉取该模型对应表的列定义并更新。",
         "operationId": "syncModel",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ModelId"
@@ -387,7 +426,13 @@
     "schemas": {
       "ApiEnvelopeBase": {
         "type": "object",
-        "required": ["request_id", "timestamp", "code", "message", "data"],
+        "required": [
+          "request_id",
+          "timestamp",
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
           "request_id": {
             "type": "string",
@@ -519,7 +564,10 @@
       },
       "TableInfo": {
         "type": "object",
-        "required": ["name", "comment"],
+        "required": [
+          "name",
+          "comment"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -531,7 +579,9 @@
       },
       "TablesData": {
         "type": "object",
-        "required": ["tables"],
+        "required": [
+          "tables"
+        ],
         "properties": {
           "tables": {
             "type": "array",
@@ -543,7 +593,10 @@
       },
       "GenerateModelsData": {
         "type": "object",
-        "required": ["generated", "skipped"],
+        "required": [
+          "generated",
+          "skipped"
+        ],
         "properties": {
           "generated": {
             "type": "array",
@@ -562,7 +615,12 @@
       },
       "ModelListData": {
         "type": "object",
-        "required": ["list", "total", "page", "size"],
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ],
         "properties": {
           "list": {
             "type": "array",
@@ -586,7 +644,10 @@
       },
       "DeletedData": {
         "type": "object",
-        "required": ["id", "deleted"],
+        "required": [
+          "id",
+          "deleted"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -594,7 +655,9 @@
           },
           "deleted": {
             "type": "boolean",
-            "enum": [true]
+            "enum": [
+              true
+            ]
           }
         }
       },

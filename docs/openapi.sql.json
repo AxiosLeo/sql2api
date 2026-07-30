@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "sql2api Sqls API",
-    "description": "SQL 注册与管理模块：类型判定、AI 审查/生成、CRUD。注册成功后可通过 /api/invoke/{id} 调用。所有业务接口需 Bearer Api-Key 鉴权。",
+    "description": "SQL 注册与管理模块：类型判定、AI 审查/生成、CRUD。注册成功后可通过 /openapi/invoke/{id} 调用。所有业务接口需 Bearer Api-Key 鉴权。",
     "version": "0.0.1"
   },
   "servers": [
@@ -23,13 +23,19 @@
     }
   ],
   "paths": {
-    "/api/sqls": {
+    "/openapi/sqls": {
       "post": {
-        "tags": ["Sqls"],
+        "tags": [
+          "Sqls"
+        ],
         "summary": "注册 SQL",
         "description": "解析 SQL 类型并映射 HTTP method（SELECT→GET、INSERT→POST、UPDATE→PATCH、DELETE→DELETE），调用 AI 审查通过后落库。",
         "operationId": "createSql",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -108,10 +114,16 @@
         }
       },
       "get": {
-        "tags": ["Sqls"],
+        "tags": [
+          "Sqls"
+        ],
         "summary": "SQL 列表",
         "operationId": "listSqls",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -158,7 +170,12 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["select", "insert", "update", "delete"]
+              "enum": [
+                "select",
+                "insert",
+                "update",
+                "delete"
+              ]
             }
           }
         ],
@@ -182,13 +199,19 @@
         }
       }
     },
-    "/api/sqls/generate": {
+    "/openapi/sqls/generate": {
       "post": {
-        "tags": ["Sqls"],
+        "tags": [
+          "Sqls"
+        ],
         "summary": "AI 生成 SQL",
         "description": "根据自然语言与连接下的模型上下文生成 SQL，不落库。",
         "operationId": "generateSql",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -230,13 +253,19 @@
         }
       }
     },
-    "/api/sqls/review": {
+    "/openapi/sqls/review": {
       "post": {
-        "tags": ["Sqls"],
+        "tags": [
+          "Sqls"
+        ],
         "summary": "AI 审查 SQL",
         "description": "可选传入 connection_id 以加载方言与模型上下文；不落库。",
         "operationId": "reviewSql",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -277,12 +306,18 @@
         }
       }
     },
-    "/api/sqls/{id}": {
+    "/openapi/sqls/{id}": {
       "get": {
-        "tags": ["Sqls"],
+        "tags": [
+          "Sqls"
+        ],
         "summary": "SQL 详情",
         "operationId": "getSql",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/SqlId"
@@ -308,11 +343,17 @@
         }
       },
       "patch": {
-        "tags": ["Sqls"],
+        "tags": [
+          "Sqls"
+        ],
         "summary": "更新 SQL",
         "description": "若变更 sql 文本，将重新判定类型并 AI 审查。",
         "operationId": "updateSql",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/SqlId"
@@ -367,10 +408,16 @@
         }
       },
       "delete": {
-        "tags": ["Sqls"],
+        "tags": [
+          "Sqls"
+        ],
         "summary": "删除 SQL",
         "operationId": "deleteSql",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/SqlId"
@@ -473,7 +520,13 @@
     "schemas": {
       "ApiEnvelopeBase": {
         "type": "object",
-        "required": ["request_id", "timestamp", "code", "message", "data"],
+        "required": [
+          "request_id",
+          "timestamp",
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
           "request_id": {
             "type": "string"
@@ -508,7 +561,10 @@
       },
       "SqlParamDef": {
         "type": "object",
-        "required": ["name", "rule"],
+        "required": [
+          "name",
+          "rule"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -528,11 +584,18 @@
       },
       "ReviewIssue": {
         "type": "object",
-        "required": ["severity", "message"],
+        "required": [
+          "severity",
+          "message"
+        ],
         "properties": {
           "severity": {
             "type": "string",
-            "enum": ["error", "warning", "info"]
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ]
           },
           "message": {
             "type": "string"
@@ -544,7 +607,10 @@
       },
       "ReviewResult": {
         "type": "object",
-        "required": ["passed", "issues"],
+        "required": [
+          "passed",
+          "issues"
+        ],
         "properties": {
           "passed": {
             "type": "boolean"
@@ -559,7 +625,11 @@
       },
       "CreateSqlBody": {
         "type": "object",
-        "required": ["connection_id", "name", "sql"],
+        "required": [
+          "connection_id",
+          "name",
+          "sql"
+        ],
         "properties": {
           "connection_id": {
             "type": "string",
@@ -608,13 +678,19 @@
           },
           "status": {
             "type": "string",
-            "enum": ["enabled", "disabled"]
+            "enum": [
+              "enabled",
+              "disabled"
+            ]
           }
         }
       },
       "GenerateSqlBody": {
         "type": "object",
-        "required": ["connection_id", "prompt"],
+        "required": [
+          "connection_id",
+          "prompt"
+        ],
         "properties": {
           "connection_id": {
             "type": "string",
@@ -635,7 +711,9 @@
       },
       "ReviewSqlBody": {
         "type": "object",
-        "required": ["sql"],
+        "required": [
+          "sql"
+        ],
         "properties": {
           "sql": {
             "type": "string"
@@ -683,15 +761,25 @@
           },
           "sql_type": {
             "type": "string",
-            "enum": ["select", "insert", "update", "delete"]
+            "enum": [
+              "select",
+              "insert",
+              "update",
+              "delete"
+            ]
           },
           "method": {
             "type": "string",
-            "enum": ["GET", "POST", "PATCH", "DELETE"]
+            "enum": [
+              "GET",
+              "POST",
+              "PATCH",
+              "DELETE"
+            ]
           },
           "endpoint": {
             "type": "string",
-            "description": "调用路径，形如 /api/invoke/{id}"
+            "description": "调用路径，形如 /openapi/invoke/{id}"
           },
           "params": {
             "type": "array",
@@ -701,7 +789,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["enabled", "disabled"]
+            "enum": [
+              "enabled",
+              "disabled"
+            ]
           },
           "review": {
             "$ref": "#/components/schemas/ReviewResult"
@@ -718,7 +809,13 @@
       },
       "GenerateResult": {
         "type": "object",
-        "required": ["sql", "sql_type", "method", "params", "explanation"],
+        "required": [
+          "sql",
+          "sql_type",
+          "method",
+          "params",
+          "explanation"
+        ],
         "properties": {
           "sql": {
             "type": "string"
@@ -742,7 +839,12 @@
       },
       "SqlListData": {
         "type": "object",
-        "required": ["list", "total", "page", "size"],
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ],
         "properties": {
           "list": {
             "type": "array",
@@ -766,7 +868,10 @@
       },
       "DeletedData": {
         "type": "object",
-        "required": ["id", "deleted"],
+        "required": [
+          "id",
+          "deleted"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -774,7 +879,9 @@
           },
           "deleted": {
             "type": "boolean",
-            "enum": [true]
+            "enum": [
+              true
+            ]
           }
         }
       },

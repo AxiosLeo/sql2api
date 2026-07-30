@@ -49,7 +49,8 @@ export const generateModelsRules = {
 
 export const modelListQueryRules = {
   ...paginationRules,
-  connection_id: 'string'
+  connection_id: 'string',
+  app_id: 'string'
 };
 
 /** Map a DB record to API response (parse columns_json). */

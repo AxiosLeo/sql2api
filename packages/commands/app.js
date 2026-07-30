@@ -74,7 +74,7 @@ class AppCommand extends Command {
         break;
       }
       case 'list': {
-        const apps = sqlite.listApps();
+        const apps = sqlite.listApps().list;
         if (!apps.length) {
           printer.yellow('No applications found.').println();
           return;

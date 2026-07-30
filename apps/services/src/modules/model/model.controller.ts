@@ -7,6 +7,7 @@ import type {
 import { toModelItem } from './model.model';
 import {
   deleteModel,
+  getConnection,
   getConnectionConfig,
   getModel,
   listModels,
@@ -27,7 +28,7 @@ export class ModelController extends BaseController {
   }
 
   async generate(context: KoaContext) {
-    const appId = this.appId(context);
+    const scope = this.appId(context);
     const connectionId = context.params?.connection_id || '';
     const body = (context.body || {}) as GenerateModelsBody;
 
@@ -36,7 +37,12 @@ export class ModelController extends BaseController {
       this.error(400, 'Either "all" or non-empty "tables" is required');
     }
 
-    const config = getConnectionConfig(appId, connectionId);
+    const conn = getConnection(scope, connectionId);
+    if (!conn) {
+      this.error(404, 'Not Found');
+    }
+
+    const config = getConnectionConfig(scope, connectionId);
     if (!config) {
       this.error(404, 'Not Found');
     }
@@ -64,7 +70,7 @@ export class ModelController extends BaseController {
         continue;
       }
       const record = upsertModel({
-        app_id: appId,
+        app_id: conn!.app_id,
         connection_id: connectionId,
         table_name: name,
         comment: info.comment || '',
@@ -125,7 +131,7 @@ export class ModelController extends BaseController {
     }
 
     const updated = upsertModel({
-      app_id: appId,
+      app_id: record!.app_id,
       connection_id: record!.connection_id,
       table_name: record!.table_name,
       comment: info!.comment || '',

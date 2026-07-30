@@ -23,6 +23,8 @@ export interface CreateConnectionBody {
   username: string;
   password: string;
   database: string;
+  /** Required when creating via admin session (no Bearer app scope). */
+  app_id?: string;
 }
 
 export interface UpdateConnectionBody {
@@ -40,6 +42,7 @@ export interface ConnectionListQuery {
   page?: number;
   size?: number;
   keyword?: string;
+  app_id?: string;
 }
 
 export interface TestConnectionResult {
@@ -55,7 +58,8 @@ export const createConnectionRules = {
   port: 'required|integer|min:1|max:65535',
   username: 'required|string',
   password: 'required|string',
-  database: 'required|string'
+  database: 'required|string',
+  app_id: 'string'
 };
 
 export const updateConnectionRules = {
@@ -74,7 +78,8 @@ export const connectionIdRules = {
 };
 
 export const connectionListQueryRules = {
-  ...paginationRules
+  ...paginationRules,
+  app_id: 'string'
 };
 
 /** Map a DB record to API response (never expose password_enc / app_id). */

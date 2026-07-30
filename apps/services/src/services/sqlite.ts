@@ -343,8 +343,25 @@ export function createApp(name: string, description = ''): AppRecord {
   return row;
 }
 
-export function listApps(): AppRecord[] {
-  return getDB().prepare('SELECT * FROM apps ORDER BY created_at DESC').all() as AppRecord[];
+export function listApps(options: ListOptions = {}): PaginatedResult<AppRecord> {
+  const page = options.page && options.page > 0 ? options.page : 1;
+  const size = options.size && options.size > 0 ? Math.min(options.size, 100) : 20;
+  const offset = (page - 1) * size;
+
+  const params: unknown[] = [];
+  let where = '1=1';
+  if (options.keyword) {
+    where += ' AND (name LIKE ? OR description LIKE ?)';
+    params.push(`%${options.keyword}%`, `%${options.keyword}%`);
+  }
+
+  const db = getDB();
+  const total = (db.prepare(`SELECT COUNT(*) AS c FROM apps WHERE ${where}`).get(...params) as { c: number }).c;
+  const list = db
+    .prepare(`SELECT * FROM apps WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .all(...params, size, offset) as AppRecord[];
+
+  return { list, total, page, size };
 }
 
 export function getApp(id: string): AppRecord | null {
@@ -353,6 +370,31 @@ export function getApp(id: string): AppRecord | null {
 
 export function getAppByName(name: string): AppRecord | null {
   return (getDB().prepare('SELECT * FROM apps WHERE name = ?').get(name) as AppRecord | undefined) || null;
+}
+
+export interface UpdateAppInput {
+  name?: string;
+  description?: string;
+  status?: EntityStatus;
+}
+
+export function updateApp(id: string, input: UpdateAppInput): AppRecord | null {
+  const existing = getApp(id);
+  if (!existing) {
+    return null;
+  }
+  const updated: AppRecord = {
+    ...existing,
+    name: input.name ?? existing.name,
+    description: input.description ?? existing.description,
+    status: input.status ?? existing.status,
+    updated_at: nowISO()
+  };
+  getDB().prepare(
+    `UPDATE apps SET name = @name, description = @description, status = @status, updated_at = @updated_at
+     WHERE id = @id`
+  ).run(updated);
+  return updated;
 }
 
 export function removeApp(id: string): boolean {
@@ -395,6 +437,14 @@ export function listApiKeys(app_id: string): ApiKeyRecord[] {
   return getDB()
     .prepare('SELECT * FROM api_keys WHERE app_id = ? ORDER BY created_at DESC')
     .all(app_id) as ApiKeyRecord[];
+}
+
+export function getApiKey(app_id: string, id: string): ApiKeyRecord | null {
+  return (
+    (getDB()
+      .prepare('SELECT * FROM api_keys WHERE id = ? AND app_id = ?')
+      .get(id, app_id) as ApiKeyRecord | undefined) || null
+  );
 }
 
 export function revokeApiKey(id: string): boolean {
@@ -460,15 +510,19 @@ export function createConnection(input: CreateConnectionInput): ConnectionRecord
 }
 
 export function listConnections(
-  app_id: string,
+  app_id: string | null,
   options: ListOptions = {}
 ): PaginatedResult<ConnectionRecord> {
   const page = options.page && options.page > 0 ? options.page : 1;
   const size = options.size && options.size > 0 ? Math.min(options.size, 100) : 20;
   const offset = (page - 1) * size;
 
-  const params: unknown[] = [app_id];
-  let where = 'app_id = ?';
+  const params: unknown[] = [];
+  let where = '1=1';
+  if (app_id) {
+    where += ' AND app_id = ?';
+    params.push(app_id);
+  }
   if (options.keyword) {
     where += ' AND name LIKE ?';
     params.push(`%${options.keyword}%`);
@@ -483,16 +537,23 @@ export function listConnections(
   return { list, total, page, size };
 }
 
-export function getConnection(app_id: string, id: string): ConnectionRecord | null {
+export function getConnection(app_id: string | null, id: string): ConnectionRecord | null {
+  if (app_id) {
+    return (
+      (getDB()
+        .prepare('SELECT * FROM connections WHERE id = ? AND app_id = ?')
+        .get(id, app_id) as ConnectionRecord | undefined) || null
+    );
+  }
   return (
     (getDB()
-      .prepare('SELECT * FROM connections WHERE id = ? AND app_id = ?')
-      .get(id, app_id) as ConnectionRecord | undefined) || null
+      .prepare('SELECT * FROM connections WHERE id = ?')
+      .get(id) as ConnectionRecord | undefined) || null
   );
 }
 
 /** Decrypt password and return a DatasourceConfig for the datasource layer. */
-export function getConnectionConfig(app_id: string, id: string): DatasourceConfig | null {
+export function getConnectionConfig(app_id: string | null, id: string): DatasourceConfig | null {
   const row = getConnection(app_id, id);
   if (!row) {
     return null;
@@ -508,7 +569,7 @@ export function getConnectionConfig(app_id: string, id: string): DatasourceConfi
 }
 
 export function updateConnection(
-  app_id: string,
+  app_id: string | null,
   id: string,
   input: UpdateConnectionInput
 ): ConnectionRecord | null {
@@ -532,21 +593,37 @@ export function updateConnection(
     updated_at: nowISO()
   };
 
-  getDB().prepare(
-    `UPDATE connections SET
-       name = @name, type = @type, host = @host, port = @port,
-       username = @username, password_enc = @password_enc, database = @database,
-       status = @status, updated_at = @updated_at
-     WHERE id = @id AND app_id = @app_id`
-  ).run(updated);
+  if (app_id) {
+    getDB().prepare(
+      `UPDATE connections SET
+         name = @name, type = @type, host = @host, port = @port,
+         username = @username, password_enc = @password_enc, database = @database,
+         status = @status, updated_at = @updated_at
+       WHERE id = @id AND app_id = @app_id`
+    ).run(updated);
+  } else {
+    getDB().prepare(
+      `UPDATE connections SET
+         name = @name, type = @type, host = @host, port = @port,
+         username = @username, password_enc = @password_enc, database = @database,
+         status = @status, updated_at = @updated_at
+       WHERE id = @id`
+    ).run(updated);
+  }
 
   return updated;
 }
 
-export function deleteConnection(app_id: string, id: string): boolean {
+export function deleteConnection(app_id: string | null, id: string): boolean {
+  if (app_id) {
+    const result = getDB()
+      .prepare('DELETE FROM connections WHERE id = ? AND app_id = ?')
+      .run(id, app_id);
+    return result.changes > 0;
+  }
   const result = getDB()
-    .prepare('DELETE FROM connections WHERE id = ? AND app_id = ?')
-    .run(id, app_id);
+    .prepare('DELETE FROM connections WHERE id = ?')
+    .run(id);
   return result.changes > 0;
 }
 
@@ -597,15 +674,19 @@ export function upsertModel(input: UpsertModelInput): ModelRecord {
 }
 
 export function listModels(
-  app_id: string,
+  app_id: string | null,
   options: ListOptions = {}
 ): PaginatedResult<ModelRecord> {
   const page = options.page && options.page > 0 ? options.page : 1;
   const size = options.size && options.size > 0 ? Math.min(options.size, 100) : 20;
   const offset = (page - 1) * size;
 
-  const params: unknown[] = [app_id];
-  let where = 'app_id = ?';
+  const params: unknown[] = [];
+  let where = '1=1';
+  if (app_id) {
+    where += ' AND app_id = ?';
+    params.push(app_id);
+  }
   if (options.connection_id) {
     where += ' AND connection_id = ?';
     params.push(options.connection_id);
@@ -624,18 +705,31 @@ export function listModels(
   return { list, total, page, size };
 }
 
-export function getModel(app_id: string, id: string): ModelRecord | null {
+export function getModel(app_id: string | null, id: string): ModelRecord | null {
+  if (app_id) {
+    return (
+      (getDB()
+        .prepare('SELECT * FROM models WHERE id = ? AND app_id = ?')
+        .get(id, app_id) as ModelRecord | undefined) || null
+    );
+  }
   return (
     (getDB()
-      .prepare('SELECT * FROM models WHERE id = ? AND app_id = ?')
-      .get(id, app_id) as ModelRecord | undefined) || null
+      .prepare('SELECT * FROM models WHERE id = ?')
+      .get(id) as ModelRecord | undefined) || null
   );
 }
 
-export function deleteModel(app_id: string, id: string): boolean {
+export function deleteModel(app_id: string | null, id: string): boolean {
+  if (app_id) {
+    const result = getDB()
+      .prepare('DELETE FROM models WHERE id = ? AND app_id = ?')
+      .run(id, app_id);
+    return result.changes > 0;
+  }
   const result = getDB()
-    .prepare('DELETE FROM models WHERE id = ? AND app_id = ?')
-    .run(id, app_id);
+    .prepare('DELETE FROM models WHERE id = ?')
+    .run(id);
   return result.changes > 0;
 }
 
@@ -670,15 +764,19 @@ export function createSql(input: CreateSqlInput): SqlRecord {
 }
 
 export function listSqls(
-  app_id: string,
+  app_id: string | null,
   options: ListOptions = {}
 ): PaginatedResult<SqlRecord> {
   const page = options.page && options.page > 0 ? options.page : 1;
   const size = options.size && options.size > 0 ? Math.min(options.size, 100) : 20;
   const offset = (page - 1) * size;
 
-  const params: unknown[] = [app_id];
-  let where = 'app_id = ?';
+  const params: unknown[] = [];
+  let where = '1=1';
+  if (app_id) {
+    where += ' AND app_id = ?';
+    params.push(app_id);
+  }
   if (options.connection_id) {
     where += ' AND connection_id = ?';
     params.push(options.connection_id);
@@ -701,16 +799,23 @@ export function listSqls(
   return { list, total, page, size };
 }
 
-export function getSql(app_id: string, id: string): SqlRecord | null {
+export function getSql(app_id: string | null, id: string): SqlRecord | null {
+  if (app_id) {
+    return (
+      (getDB()
+        .prepare('SELECT * FROM sqls WHERE id = ? AND app_id = ?')
+        .get(id, app_id) as SqlRecord | undefined) || null
+    );
+  }
   return (
     (getDB()
-      .prepare('SELECT * FROM sqls WHERE id = ? AND app_id = ?')
-      .get(id, app_id) as SqlRecord | undefined) || null
+      .prepare('SELECT * FROM sqls WHERE id = ?')
+      .get(id) as SqlRecord | undefined) || null
   );
 }
 
 export function updateSql(
-  app_id: string,
+  app_id: string | null,
   id: string,
   input: UpdateSqlInput
 ): SqlRecord | null {
@@ -737,21 +842,38 @@ export function updateSql(
     updated_at: nowISO()
   };
 
-  getDB().prepare(
-    `UPDATE sqls SET
-       connection_id = @connection_id, name = @name, description = @description,
-       sql_text = @sql_text, sql_type = @sql_type, method = @method,
-       params_json = @params_json, review_json = @review_json,
-       status = @status, updated_at = @updated_at
-     WHERE id = @id AND app_id = @app_id`
-  ).run(updated);
+  if (app_id) {
+    getDB().prepare(
+      `UPDATE sqls SET
+         connection_id = @connection_id, name = @name, description = @description,
+         sql_text = @sql_text, sql_type = @sql_type, method = @method,
+         params_json = @params_json, review_json = @review_json,
+         status = @status, updated_at = @updated_at
+       WHERE id = @id AND app_id = @app_id`
+    ).run(updated);
+  } else {
+    getDB().prepare(
+      `UPDATE sqls SET
+         connection_id = @connection_id, name = @name, description = @description,
+         sql_text = @sql_text, sql_type = @sql_type, method = @method,
+         params_json = @params_json, review_json = @review_json,
+         status = @status, updated_at = @updated_at
+       WHERE id = @id`
+    ).run(updated);
+  }
 
   return updated;
 }
 
-export function deleteSql(app_id: string, id: string): boolean {
+export function deleteSql(app_id: string | null, id: string): boolean {
+  if (app_id) {
+    const result = getDB()
+      .prepare('DELETE FROM sqls WHERE id = ? AND app_id = ?')
+      .run(id, app_id);
+    return result.changes > 0;
+  }
   const result = getDB()
-    .prepare('DELETE FROM sqls WHERE id = ? AND app_id = ?')
-    .run(id, app_id);
+    .prepare('DELETE FROM sqls WHERE id = ?')
+    .run(id);
   return result.changes > 0;
 }

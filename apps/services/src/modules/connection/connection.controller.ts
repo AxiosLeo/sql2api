@@ -18,12 +18,23 @@ import { testConnection } from '../../services/datasource';
 
 export class ConnectionController extends BaseController {
   async create(context: KoaContext) {
-    const appId = this.appId(context);
+    const scope = this.appId(context);
     const body = context.body as CreateConnectionBody;
+
+    let appId = scope;
+    if (this.isAdmin(context)) {
+      if (!body.app_id) {
+        this.error(400, 'app_id is required');
+      }
+      appId = body.app_id!;
+    }
+    if (!appId) {
+      this.error(401, 'Unauthorized');
+    }
 
     try {
       const record = createConnection({
-        app_id: appId,
+        app_id: appId!,
         name: body.name,
         type: body.type,
         host: body.host,

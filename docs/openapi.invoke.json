@@ -23,13 +23,19 @@
     }
   ],
   "paths": {
-    "/api/invoke/{uuid}": {
+    "/openapi/invoke/{uuid}": {
       "get": {
-        "tags": ["Invoke"],
+        "tags": [
+          "Invoke"
+        ],
         "summary": "调用 SELECT 类 SQL（GET）",
         "description": "仅当注册 SQL 的 method 为 GET 时允许。参数来自 query，仅收集声明的 params。",
         "operationId": "invokeGet",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/InvokeUuid"
@@ -76,11 +82,17 @@
         }
       },
       "post": {
-        "tags": ["Invoke"],
+        "tags": [
+          "Invoke"
+        ],
         "summary": "调用 INSERT 类 SQL（POST）",
         "description": "仅当注册 SQL 的 method 为 POST 时允许。参数来自 JSON body 自由对象。",
         "operationId": "invokePost",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/InvokeUuid"
@@ -133,11 +145,17 @@
         }
       },
       "patch": {
-        "tags": ["Invoke"],
+        "tags": [
+          "Invoke"
+        ],
         "summary": "调用 UPDATE 类 SQL（PATCH）",
         "description": "仅当注册 SQL 的 method 为 PATCH 时允许。参数来自 JSON body。",
         "operationId": "invokePatch",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/InvokeUuid"
@@ -190,11 +208,17 @@
         }
       },
       "delete": {
-        "tags": ["Invoke"],
+        "tags": [
+          "Invoke"
+        ],
         "summary": "调用 DELETE 类 SQL（DELETE）",
         "description": "仅当注册 SQL 的 method 为 DELETE 时允许。参数来自 query。",
         "operationId": "invokeDelete",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/InvokeUuid"
@@ -278,7 +302,9 @@
               "message": "Bad Data",
               "data": {
                 "errors": {
-                  "id": ["The id field is required."]
+                  "id": [
+                    "The id field is required."
+                  ]
                 }
               }
             }
@@ -349,7 +375,13 @@
     "schemas": {
       "ApiEnvelopeBase": {
         "type": "object",
-        "required": ["request_id", "timestamp", "code", "message", "data"],
+        "required": [
+          "request_id",
+          "timestamp",
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
           "request_id": {
             "type": "string"
@@ -384,7 +416,10 @@
       },
       "InvokeSelectData": {
         "type": "object",
-        "required": ["rows", "row_count"],
+        "required": [
+          "rows",
+          "row_count"
+        ],
         "properties": {
           "rows": {
             "type": "array",
@@ -401,7 +436,9 @@
       },
       "InvokeWriteData": {
         "type": "object",
-        "required": ["affected_rows"],
+        "required": [
+          "affected_rows"
+        ],
         "properties": {
           "affected_rows": {
             "type": "integer",
@@ -453,7 +490,9 @@
             "properties": {
               "data": {
                 "type": "object",
-                "required": ["errors"],
+                "required": [
+                  "errors"
+                ],
                 "properties": {
                   "errors": {
                     "type": "object",
@@ -480,11 +519,19 @@
             "properties": {
               "data": {
                 "type": "object",
-                "required": ["expected", "actual"],
+                "required": [
+                  "expected",
+                  "actual"
+                ],
                 "properties": {
                   "expected": {
                     "type": "string",
-                    "enum": ["GET", "POST", "PATCH", "DELETE"]
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PATCH",
+                      "DELETE"
+                    ]
                   },
                   "actual": {
                     "type": "string"

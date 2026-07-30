@@ -23,12 +23,18 @@
     }
   ],
   "paths": {
-    "/api/connections": {
+    "/openapi/connections": {
       "post": {
-        "tags": ["Connections"],
+        "tags": [
+          "Connections"
+        ],
         "summary": "创建数据库连接",
         "operationId": "createConnection",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -71,10 +77,16 @@
         }
       },
       "get": {
-        "tags": ["Connections"],
+        "tags": [
+          "Connections"
+        ],
         "summary": "连接列表",
         "operationId": "listConnections",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -129,12 +141,18 @@
         }
       }
     },
-    "/api/connections/{id}": {
+    "/openapi/connections/{id}": {
       "get": {
-        "tags": ["Connections"],
+        "tags": [
+          "Connections"
+        ],
         "summary": "连接详情",
         "operationId": "getConnection",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ConnectionId"
@@ -160,10 +178,16 @@
         }
       },
       "patch": {
-        "tags": ["Connections"],
+        "tags": [
+          "Connections"
+        ],
         "summary": "更新连接",
         "operationId": "updateConnection",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ConnectionId"
@@ -209,10 +233,16 @@
         }
       },
       "delete": {
-        "tags": ["Connections"],
+        "tags": [
+          "Connections"
+        ],
         "summary": "删除连接",
         "operationId": "deleteConnection",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ConnectionId"
@@ -248,13 +278,19 @@
         }
       }
     },
-    "/api/connections/{id}/test": {
+    "/openapi/connections/{id}/test": {
       "post": {
-        "tags": ["Connections"],
+        "tags": [
+          "Connections"
+        ],
         "summary": "测试连接连通性",
         "description": "对已保存的连接发起 SELECT 1 探测。失败时仍返回 HTTP 200，data.ok=false。",
         "operationId": "testConnection",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/ConnectionId"
@@ -407,7 +443,13 @@
     "schemas": {
       "ApiEnvelopeBase": {
         "type": "object",
-        "required": ["request_id", "timestamp", "code", "message", "data"],
+        "required": [
+          "request_id",
+          "timestamp",
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
           "request_id": {
             "type": "string",
@@ -474,11 +516,17 @@
       },
       "DatasourceType": {
         "type": "string",
-        "enum": ["mysql", "postgresql"]
+        "enum": [
+          "mysql",
+          "postgresql"
+        ]
       },
       "EntityStatus": {
         "type": "string",
-        "enum": ["active", "disabled"]
+        "enum": [
+          "active",
+          "disabled"
+        ]
       },
       "CreateConnectionBody": {
         "type": "object",
@@ -607,7 +655,12 @@
       },
       "ConnectionListData": {
         "type": "object",
-        "required": ["list", "total", "page", "size"],
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ],
         "properties": {
           "list": {
             "type": "array",
@@ -631,7 +684,9 @@
       },
       "TestConnectionData": {
         "type": "object",
-        "required": ["ok"],
+        "required": [
+          "ok"
+        ],
         "properties": {
           "ok": {
             "type": "boolean"
@@ -647,7 +702,10 @@
       },
       "DeletedData": {
         "type": "object",
-        "required": ["id", "deleted"],
+        "required": [
+          "id",
+          "deleted"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -655,7 +713,9 @@
           },
           "deleted": {
             "type": "boolean",
-            "enum": [true]
+            "enum": [
+              true
+            ]
           }
         }
       },

@@ -113,7 +113,8 @@ export const sqlIdRules = {
 export const sqlListQueryRules = {
   ...paginationRules,
   connection_id: 'string',
-  sql_type: 'in:select,insert,update,delete'
+  sql_type: 'in:select,insert,update,delete',
+  app_id: 'string'
 };
 
 const SUPPORTED_TYPES = new Set<string>(['select', 'insert', 'update', 'delete']);
@@ -147,7 +148,7 @@ export function toSqlItem(record: SqlRecord): SqlItem {
     sql: record.sql_text,
     sql_type: record.sql_type,
     method: record.method,
-    endpoint: `/api/invoke/${record.id}`,
+    endpoint: `/openapi/invoke/${record.id}`,
     params,
     status: record.status,
     review,

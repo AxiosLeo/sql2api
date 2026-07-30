@@ -1,0 +1,852 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "sql2api Admin API",
+    "description": "后台管理接口：基于 cookie session 登录（账号密码来自服务端环境变量 ADMIN_USERNAME / ADMIN_PASSWORD），以及应用与 Api-Key 管理。登录后可跨应用查看全部业务数据。",
+    "version": "0.0.1"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:13334",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "AdminAuth",
+      "description": "后台登录 / 登出 / 当前用户"
+    },
+    {
+      "name": "Apps",
+      "description": "应用与 Api-Key 管理"
+    }
+  ],
+  "security": [
+    {
+      "cookieAuth": []
+    }
+  ],
+  "paths": {
+    "/api/login": {
+      "post": {
+        "tags": ["AdminAuth"],
+        "summary": "后台登录",
+        "description": "校验环境变量中的管理员账号密码，成功后写入 session cookie。",
+        "operationId": "adminLogin",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginBody"
+              },
+              "example": {
+                "username": "admin",
+                "password": "your-password"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功，响应 Set-Cookie",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/logout": {
+      "get": {
+        "tags": ["AdminAuth"],
+        "summary": "后台登出",
+        "operationId": "adminLogout",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "登出成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOkResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profile": {
+      "get": {
+        "tags": ["AdminAuth"],
+        "summary": "当前登录用户",
+        "description": "供前端恢复登录态；未登录返回 401。",
+        "operationId": "adminProfile",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "已登录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/apps": {
+      "get": {
+        "tags": ["Apps"],
+        "summary": "应用列表",
+        "operationId": "listApps",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "列表成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Apps"],
+        "summary": "创建应用",
+        "operationId": "createApp",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAppBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/apps/{id}": {
+      "get": {
+        "tags": ["Apps"],
+        "summary": "应用详情",
+        "operationId": "getApp",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "详情成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppItemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Apps"],
+        "summary": "更新应用",
+        "operationId": "updateApp",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAppBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Apps"],
+        "summary": "删除应用",
+        "description": "级联删除该应用下的 Api-Key、connections、models、sqls。",
+        "operationId": "deleteApp",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/apps/{id}/keys": {
+      "get": {
+        "tags": ["Apps"],
+        "summary": "Api-Key 列表",
+        "description": "脱敏返回（不含明文 token / token_hash）。",
+        "operationId": "listAppKeys",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "列表成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Apps"],
+        "summary": "创建 Api-Key",
+        "description": "明文 token 仅在本次响应中返回一次。",
+        "operationId": "createAppKey",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppId"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiKeyBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateApiKeyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/apps/{id}/keys/{keyId}": {
+      "delete": {
+        "tags": ["Apps"],
+        "summary": "吊销 Api-Key",
+        "operationId": "revokeAppKey",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppId"
+          },
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "吊销成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "koa.sess",
+        "description": "由 POST /api/login 下发的 session cookie（及对应签名 cookie）。浏览器同源请求自动携带；curl 使用 -c/-b cookie jar。"
+      }
+    },
+    "parameters": {
+      "AppId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "请求参数错误",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "未登录或账号密码错误",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "资源不存在",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "同名应用已存在",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApiEnvelopeBase": {
+        "type": "object",
+        "required": ["request_id", "timestamp", "code", "message", "data"],
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "ErrorEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        ]
+      },
+      "LoginBody": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          }
+        }
+      },
+      "AdminProfile": {
+        "type": "object",
+        "required": ["username"],
+        "properties": {
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateAppBody": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateAppBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "disabled"]
+          }
+        }
+      },
+      "AppItem": {
+        "type": "object",
+        "required": ["id", "name", "description", "status", "created_at", "updated_at"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "disabled"]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AppListData": {
+        "type": "object",
+        "required": ["list", "total", "page", "size"],
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppItem"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          }
+        }
+      },
+      "ApiKeyItem": {
+        "type": "object",
+        "required": ["id", "app_id", "name", "prefix", "status", "last_used_at", "created_at"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "app_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "disabled"]
+          },
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateApiKeyBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "CreateApiKeyData": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiKeyItem"
+          },
+          {
+            "type": "object",
+            "required": ["token"],
+            "properties": {
+              "token": {
+                "type": "string",
+                "description": "明文 Api-Key，仅创建时返回一次"
+              }
+            }
+          }
+        ]
+      },
+      "ApiKeyListData": {
+        "type": "object",
+        "required": ["list"],
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyItem"
+            }
+          }
+        }
+      },
+      "DeletedData": {
+        "type": "object",
+        "required": ["id", "deleted"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        }
+      },
+      "RevokedData": {
+        "type": "object",
+        "required": ["id", "revoked"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        }
+      },
+      "StatusOkData": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"]
+          }
+        }
+      },
+      "ProfileResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AdminProfile"
+              }
+            }
+          }
+        ]
+      },
+      "StatusOkResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/StatusOkData"
+              }
+            }
+          }
+        ]
+      },
+      "AppItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AppItem"
+              }
+            }
+          }
+        ]
+      },
+      "AppListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AppListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiKeyListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ApiKeyListData"
+              }
+            }
+          }
+        ]
+      },
+      "CreateApiKeyResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/CreateApiKeyData"
+              }
+            }
+          }
+        ]
+      },
+      "DeletedResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/DeletedData"
+              }
+            }
+          }
+        ]
+      },
+      "RevokedResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/RevokedData"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

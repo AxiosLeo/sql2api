@@ -1,27 +1,23 @@
-import { KoaApplication } from '@axiosleo/koapp';
-import { locales } from '@axiosleo/cli-tool';
 import routers from '@/modules/index';
+import { locales } from '@axiosleo/cli-tool';
+import { KoaApplication } from '@axiosleo/koapp';
 import path from 'path';
 import config from './config';
 
 export default class App extends KoaApplication {
   constructor() {
     const debugMode = config.envs.deploy !== 'prod';
-    const staticRoot = config.envs.app.web_public;
-    let root = path.join(__dirname, '../../');
-    if (!debugMode) {
-      root = process.cwd();
-    }
     const options = {
+      // Stable app_id so koa-session cookie signing survives restarts.
+      app_id: 'sql2api-services',
       listen_host: '0.0.0.0',
       debug: debugMode,
       port: config.envs.app.api_port,
       routers,
-      static: {
-        rootDir: path.join(root, staticRoot || '../web/'),
-        index: 'index.html',
-        // notFoundFile: 'view/error/404.html'
-      },
+      body_parser: {
+        enableTypes: ['json', 'form', 'text'],
+        encode: 'utf-8'
+      }
     };
     super(options);
     locales.init({

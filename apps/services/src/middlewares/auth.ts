@@ -3,8 +3,10 @@ import type { KoaContext } from '@axiosleo/koapp';
 import { resolveApiKey } from '../services/sqlite';
 
 export interface AuthContext {
-  app_id: string;
+  /** Owning app id for Bearer keys; null for admin session (no app filter). */
+  app_id: string | null;
   key_id: string;
+  is_admin?: boolean;
 }
 
 declare module '@axiosleo/koapp' {

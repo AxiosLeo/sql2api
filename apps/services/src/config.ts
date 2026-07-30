@@ -9,6 +9,11 @@ export default {
       api_port: process.env.API_PORT ? parseInt(process.env.API_PORT) : 13334,
       secret: process.env.APP_SECRET || 'sql2api-dev-secret-change-me'
     },
+    admin: {
+      username: process.env.ADMIN_USERNAME || 'admin',
+      // Empty password disables login (forces explicit configuration).
+      password: process.env.ADMIN_PASSWORD || ''
+    },
     sqlite: {
       path: process.env.SQLITE_PATH || './data/sql2api.db'
     },

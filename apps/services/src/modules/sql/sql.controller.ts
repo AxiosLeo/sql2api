@@ -35,7 +35,7 @@ function parseColumns(json: string): ColumnDefinition[] {
 
 export class SqlController extends BaseController {
   private loadModelContexts(
-    appId: string,
+    appId: string | null,
     connectionId: string,
     modelIds?: string[]
   ): ModelContext[] {
@@ -53,17 +53,17 @@ export class SqlController extends BaseController {
   }
 
   async create(context: KoaContext) {
-    const appId = this.appId(context);
+    const scope = this.appId(context);
     const body = context.body as CreateSqlBody;
 
-    const conn = getConnection(appId, body.connection_id);
+    const conn = getConnection(scope, body.connection_id);
     if (!conn) {
       this.error(404, 'Not Found Connection');
     }
 
     const sqlType = detectSqlType(body.sql, conn!.type);
     const method = sqlTypeToMethod(sqlType);
-    const models = this.loadModelContexts(appId, body.connection_id);
+    const models = this.loadModelContexts(conn!.app_id, body.connection_id);
 
     const review = await reviewSQL({
       sql: body.sql,
@@ -78,7 +78,7 @@ export class SqlController extends BaseController {
 
     try {
       const record = createSql({
-        app_id: appId,
+        app_id: conn!.app_id,
         connection_id: body.connection_id,
         name: body.name,
         description: body.description || '',
