@@ -6,5 +6,5 @@ allowBuilds:
   es5-ext: true
   node-llama-cpp: true
   better-sqlite3: true
-  '@clerk/shared': set this to true or false
-  esbuild: set this to true or false
+  '@clerk/shared': true
+  esbuild: false

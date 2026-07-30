@@ -17,6 +17,11 @@ export default {
     sqlite: {
       path: process.env.SQLITE_PATH || './data/sql2api.db'
     },
+    invoke_log: {
+      retention_days: process.env.INVOKE_LOG_RETENTION_DAYS
+        ? parseInt(process.env.INVOKE_LOG_RETENTION_DAYS, 10)
+        : 30
+    },
     ai: {
       model_path: process.env.LLAMA_MODEL_PATH || ''
     },

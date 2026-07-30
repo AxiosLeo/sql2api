@@ -524,6 +524,7 @@
         "type": "object",
         "required": [
           "id",
+          "app_id",
           "connection_id",
           "table_name",
           "comment",
@@ -533,6 +534,10 @@
         ],
         "properties": {
           "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "app_id": {
             "type": "string",
             "format": "uuid"
           },

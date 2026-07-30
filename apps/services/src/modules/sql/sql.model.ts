@@ -13,6 +13,7 @@ import type { SqlRecord } from '../../services/sqlite';
 
 export interface SqlItem {
   id: string;
+  app_id: string;
   connection_id: string;
   name: string;
   description: string;
@@ -142,6 +143,7 @@ export function toSqlItem(record: SqlRecord): SqlItem {
 
   return {
     id: record.id,
+    app_id: record.app_id,
     connection_id: record.connection_id,
     name: record.name,
     description: record.description,

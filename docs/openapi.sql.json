@@ -728,6 +728,7 @@
         "type": "object",
         "required": [
           "id",
+          "app_id",
           "connection_id",
           "name",
           "description",
@@ -743,6 +744,10 @@
         ],
         "properties": {
           "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "app_id": {
             "type": "string",
             "format": "uuid"
           },

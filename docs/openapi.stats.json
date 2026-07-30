@@ -1,0 +1,345 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "sql2api Invoke Stats API (Admin Dashboard)",
+    "description": "调用统计与日志查询，仅供后台 Dashboard 使用（Admin 会话鉴权，不暴露在 /openapi 面）。调用日志仅保留最近 30 天。",
+    "version": "0.0.2"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:13334",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Stats",
+      "description": "Dashboard 调用统计概览、摘要与日志列表"
+    }
+  ],
+  "security": [
+    {
+      "cookieAuth": []
+    }
+  ],
+  "paths": {
+    "/api/stats/overview": {
+      "get": {
+        "tags": ["Stats"],
+        "summary": "Dashboard 概览",
+        "description": "返回全局实体计数（apps / connections / models / sqls）与近 30 天调用汇总。管理员可传 app_id 将调用汇总限定到单个应用（实体计数保持全局）。",
+        "operationId": "getStatsOverview",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "按应用过滤调用汇总"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsOverviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/stats/summary": {
+      "get": {
+        "tags": ["Stats"],
+        "summary": "调用统计摘要",
+        "description": "返回指定天数内的调用总量、成功/失败数、平均耗时，以及按日聚合序列。days 最大 30。",
+        "operationId": "getInvokeStatsSummary",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30,
+              "default": 30
+            },
+            "description": "统计窗口天数，默认 30，最大 30"
+          },
+          {
+            "name": "sql_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "按 SQL uuid 过滤"
+          },
+          {
+            "name": "app_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "按应用过滤"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统计成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvokeStatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/stats/logs": {
+      "get": {
+        "tags": ["Stats"],
+        "summary": "调用日志列表",
+        "description": "分页返回最近调用日志（倒序），带出 SQL 当前名称（SQL 已删除时为 null）。不包含请求参数明文。",
+        "operationId": "listInvokeLogs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "sql_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "按 SQL uuid 过滤"
+          },
+          {
+            "name": "success",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false", "1", "0"]
+            },
+            "description": "按成功/失败过滤"
+          },
+          {
+            "name": "app_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "按应用过滤"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvokeLogsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "koa.sess",
+        "description": "由 POST /api/login 下发的 session cookie（及对应签名 cookie）。浏览器同源请求自动携带；curl 使用 -c/-b cookie jar。"
+      }
+    },
+    "schemas": {
+      "InvokeDailyStat": {
+        "type": "object",
+        "required": ["date", "total", "success", "failed"],
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "日期 YYYY-MM-DD",
+            "example": "2026-07-30"
+          },
+          "total": { "type": "integer", "example": 12 },
+          "success": { "type": "integer", "example": 10 },
+          "failed": { "type": "integer", "example": 2 }
+        }
+      },
+      "InvokeStats": {
+        "type": "object",
+        "required": ["total", "success", "failed", "avg_latency_ms", "daily"],
+        "properties": {
+          "total": { "type": "integer", "example": 100 },
+          "success": { "type": "integer", "example": 95 },
+          "failed": { "type": "integer", "example": 5 },
+          "avg_latency_ms": { "type": "integer", "example": 42 },
+          "daily": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/InvokeDailyStat" }
+          }
+        }
+      },
+      "StatsOverview": {
+        "type": "object",
+        "required": ["apps", "connections", "models", "sqls", "invocations"],
+        "properties": {
+          "apps": { "type": "integer", "example": 3 },
+          "connections": { "type": "integer", "example": 2 },
+          "models": { "type": "integer", "example": 12 },
+          "sqls": { "type": "integer", "example": 8 },
+          "invocations": {
+            "type": "object",
+            "required": ["total", "success", "failed", "avg_latency_ms"],
+            "description": "近 30 天调用汇总",
+            "properties": {
+              "total": { "type": "integer", "example": 156 },
+              "success": { "type": "integer", "example": 150 },
+              "failed": { "type": "integer", "example": 6 },
+              "avg_latency_ms": { "type": "integer", "example": 42 }
+            }
+          }
+        }
+      },
+      "InvokeLogItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "app_id",
+          "sql_id",
+          "method",
+          "status_code",
+          "success",
+          "latency_ms",
+          "created_at"
+        ],
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "app_id": { "type": "string", "format": "uuid" },
+          "sql_id": { "type": "string", "format": "uuid" },
+          "sql_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "SQL 当前名称，SQL 已删除时为 null",
+            "example": "List active users"
+          },
+          "connection_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST", "PATCH", "DELETE"]
+          },
+          "status_code": { "type": "integer", "example": 200 },
+          "success": { "type": "boolean" },
+          "error_message": {
+            "type": "string",
+            "nullable": true,
+            "example": "Method Not Allowed"
+          },
+          "latency_ms": { "type": "integer", "example": 35 },
+          "row_count": {
+            "type": "integer",
+            "nullable": true,
+            "description": "select 的 row_count 或写操作的 affected_rows"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "StatsOverviewResponse": {
+        "type": "object",
+        "properties": {
+          "request_id": { "type": "string" },
+          "code": { "type": "string", "example": "200" },
+          "message": { "type": "string", "example": "Success" },
+          "data": { "$ref": "#/components/schemas/StatsOverview" }
+        }
+      },
+      "InvokeStatsResponse": {
+        "type": "object",
+        "properties": {
+          "request_id": { "type": "string" },
+          "code": { "type": "string", "example": "200" },
+          "message": { "type": "string", "example": "Success" },
+          "data": { "$ref": "#/components/schemas/InvokeStats" }
+        }
+      },
+      "InvokeLogsResponse": {
+        "type": "object",
+        "properties": {
+          "request_id": { "type": "string" },
+          "code": { "type": "string", "example": "200" },
+          "message": { "type": "string", "example": "Success" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "list": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/InvokeLogItem" }
+              },
+              "total": { "type": "integer" },
+              "page": { "type": "integer" },
+              "size": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "未授权",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": { "type": "string", "example": "401" },
+                "message": { "type": "string", "example": "Unauthorized" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

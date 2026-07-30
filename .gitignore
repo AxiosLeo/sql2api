@@ -26,5 +26,6 @@ runtime/
 .libtv/
 _tmp/
 .pnpm-store/
+tmp/
 
 *.mp4

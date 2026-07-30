@@ -19,4 +19,13 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      // Session cookies stay same-origin in dev; backend listens on 13334.
+      '/api': {
+        target: 'http://127.0.0.1:13334',
+        changeOrigin: true,
+      },
+    },
+  },
 })

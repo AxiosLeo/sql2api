@@ -3,6 +3,7 @@ import { locales } from '@axiosleo/cli-tool';
 import { KoaApplication } from '@axiosleo/koapp';
 import path from 'path';
 import config from './config';
+import { startInvokeLogRetention } from './services/retention';
 
 export default class App extends KoaApplication {
   constructor() {
@@ -26,5 +27,6 @@ export default class App extends KoaApplication {
       use: 'zh-CN',
       dir: path.join(__dirname, '../locales')
     });
+    startInvokeLogRetention();
   }
 }

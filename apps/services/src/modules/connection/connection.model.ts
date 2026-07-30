@@ -4,6 +4,7 @@ import type { ConnectionRecord } from '../../services/sqlite';
 
 export interface ConnectionItem {
   id: string;
+  app_id: string;
   name: string;
   type: DatasourceType;
   host: string;
@@ -82,10 +83,11 @@ export const connectionListQueryRules = {
   app_id: 'string'
 };
 
-/** Map a DB record to API response (never expose password_enc / app_id). */
+/** Map a DB record to API response (never expose password_enc). */
 export function toConnectionItem(record: ConnectionRecord): ConnectionItem {
   return {
     id: record.id,
+    app_id: record.app_id,
     name: record.name,
     type: record.type,
     host: record.host,

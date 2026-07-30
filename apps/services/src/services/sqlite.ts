@@ -91,6 +91,21 @@ CREATE TABLE IF NOT EXISTS sqls (
   UNIQUE(app_id, name)
 );
 
+CREATE TABLE IF NOT EXISTS invoke_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  app_id TEXT NOT NULL,
+  sql_id TEXT NOT NULL,
+  connection_id TEXT,
+  method TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  success INTEGER NOT NULL,
+  error_message TEXT,
+  latency_ms INTEGER NOT NULL,
+  row_count INTEGER,
+  params TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_api_keys_app_id ON api_keys(app_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_token_hash ON api_keys(token_hash);
 CREATE INDEX IF NOT EXISTS idx_connections_app_id ON connections(app_id);
@@ -98,6 +113,9 @@ CREATE INDEX IF NOT EXISTS idx_models_app_id ON models(app_id);
 CREATE INDEX IF NOT EXISTS idx_models_connection_id ON models(connection_id);
 CREATE INDEX IF NOT EXISTS idx_sqls_app_id ON sqls(app_id);
 CREATE INDEX IF NOT EXISTS idx_sqls_connection_id ON sqls(connection_id);
+CREATE INDEX IF NOT EXISTS idx_invoke_logs_created_at ON invoke_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_invoke_logs_app_created ON invoke_logs(app_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_invoke_logs_sql_created ON invoke_logs(sql_id, created_at);
 `;
 
 export interface AppRecord {
@@ -160,6 +178,78 @@ export interface SqlRecord {
   review_json: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface InvokeLogRecord {
+  id: number;
+  app_id: string;
+  sql_id: string;
+  connection_id: string | null;
+  method: string;
+  status_code: number;
+  success: number;
+  error_message: string | null;
+  latency_ms: number;
+  row_count: number | null;
+  params: string | null;
+  created_at: string;
+}
+
+export interface InsertInvokeLogInput {
+  app_id: string;
+  sql_id: string;
+  connection_id?: string | null;
+  method: string;
+  status_code: number;
+  success: boolean;
+  error_message?: string | null;
+  latency_ms: number;
+  row_count?: number | null;
+  params?: string | null;
+}
+
+export interface ListInvokeLogsOptions {
+  page?: number;
+  size?: number;
+  sql_id?: string;
+  success?: boolean;
+}
+
+/** Invoke log row joined with the SQL's current name (null if the SQL was deleted). */
+export interface InvokeLogListRecord extends InvokeLogRecord {
+  sql_name: string | null;
+}
+
+/** Detail row: list fields plus the SQL text snapshot (null if the SQL was deleted). */
+export interface InvokeLogDetailRecord extends InvokeLogListRecord {
+  sql_text: string | null;
+}
+
+export interface EntityCounts {
+  apps: number;
+  connections: number;
+  models: number;
+  sqls: number;
+}
+
+export interface InvokeDailyStat {
+  date: string;
+  total: number;
+  success: number;
+  failed: number;
+}
+
+export interface InvokeStatsResult {
+  total: number;
+  success: number;
+  failed: number;
+  avg_latency_ms: number;
+  daily: InvokeDailyStat[];
+}
+
+export interface GetInvokeStatsOptions {
+  days?: number;
+  sql_id?: string;
 }
 
 export interface CreateConnectionInput {
@@ -308,10 +398,21 @@ export function getDB(): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SQLITE_DDL);
+  migrateInvokeLogsParams(db);
 
   dbInstance = db;
   dbPathResolved = resolved;
   return db;
+}
+
+/** Add `params` column to existing invoke_logs tables created before this field existed. */
+function migrateInvokeLogsParams(db: Database.Database): void {
+  const columns = db.prepare('PRAGMA table_info(invoke_logs)').all() as Array<{
+    name: string;
+  }>;
+  if (!columns.some((col) => col.name === 'params')) {
+    db.exec('ALTER TABLE invoke_logs ADD COLUMN params TEXT');
+  }
 }
 
 /** Close singleton DB — used by tests. */
@@ -876,4 +977,175 @@ export function deleteSql(app_id: string | null, id: string): boolean {
     .prepare('DELETE FROM sqls WHERE id = ?')
     .run(id);
   return result.changes > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Invoke logs
+// ---------------------------------------------------------------------------
+
+export function insertInvokeLog(input: InsertInvokeLogInput): InvokeLogRecord {
+  const created_at = nowISO();
+  const params = input.params ?? null;
+  const result = getDB().prepare(
+    `INSERT INTO invoke_logs
+     (app_id, sql_id, connection_id, method, status_code, success,
+      error_message, latency_ms, row_count, params, created_at)
+     VALUES
+     (@app_id, @sql_id, @connection_id, @method, @status_code, @success,
+      @error_message, @latency_ms, @row_count, @params, @created_at)`
+  ).run({
+    app_id: input.app_id,
+    sql_id: input.sql_id,
+    connection_id: input.connection_id ?? null,
+    method: input.method,
+    status_code: input.status_code,
+    success: input.success ? 1 : 0,
+    error_message: input.error_message ?? null,
+    latency_ms: input.latency_ms,
+    row_count: input.row_count ?? null,
+    params,
+    created_at
+  });
+
+  return {
+    id: Number(result.lastInsertRowid),
+    app_id: input.app_id,
+    sql_id: input.sql_id,
+    connection_id: input.connection_id ?? null,
+    method: input.method,
+    status_code: input.status_code,
+    success: input.success ? 1 : 0,
+    error_message: input.error_message ?? null,
+    latency_ms: input.latency_ms,
+    row_count: input.row_count ?? null,
+    params,
+    created_at
+  };
+}
+
+export function getInvokeLog(id: number): InvokeLogDetailRecord | null {
+  const row = getDB()
+    .prepare(
+      `SELECT l.*, s.name AS sql_name, s.sql_text AS sql_text
+       FROM invoke_logs l
+       LEFT JOIN sqls s ON s.id = l.sql_id
+       WHERE l.id = ?`
+    )
+    .get(id) as InvokeLogDetailRecord | undefined;
+  return row ?? null;
+}
+
+export function listInvokeLogs(
+  app_id: string | null,
+  options: ListInvokeLogsOptions = {}
+): PaginatedResult<InvokeLogListRecord> {
+  const page = options.page && options.page > 0 ? options.page : 1;
+  const size = options.size && options.size > 0 ? Math.min(options.size, 100) : 20;
+  const offset = (page - 1) * size;
+
+  const params: unknown[] = [];
+  let where = '1=1';
+  if (app_id) {
+    where += ' AND l.app_id = ?';
+    params.push(app_id);
+  }
+  if (options.sql_id) {
+    where += ' AND l.sql_id = ?';
+    params.push(options.sql_id);
+  }
+  if (options.success !== undefined) {
+    where += ' AND l.success = ?';
+    params.push(options.success ? 1 : 0);
+  }
+
+  const db = getDB();
+  const total = (db.prepare(`SELECT COUNT(*) AS c FROM invoke_logs l WHERE ${where}`).get(...params) as { c: number }).c;
+  const list = db
+    .prepare(
+      `SELECT l.*, s.name AS sql_name
+       FROM invoke_logs l
+       LEFT JOIN sqls s ON s.id = l.sql_id
+       WHERE ${where}
+       ORDER BY l.created_at DESC, l.id DESC
+       LIMIT ? OFFSET ?`
+    )
+    .all(...params, size, offset) as InvokeLogListRecord[];
+
+  return { list, total, page, size };
+}
+
+/** Global entity counts for the admin dashboard overview. */
+export function getEntityCounts(): EntityCounts {
+  const db = getDB();
+  const count = (table: string): number =>
+    (db.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as { c: number }).c;
+  return {
+    apps: count('apps'),
+    connections: count('connections'),
+    models: count('models'),
+    sqls: count('sqls')
+  };
+}
+
+export function getInvokeStats(
+  app_id: string | null,
+  options: GetInvokeStatsOptions = {}
+): InvokeStatsResult {
+  const days = options.days && options.days > 0 ? Math.min(options.days, 30) : 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const params: unknown[] = [since];
+  let where = 'created_at >= ?';
+  if (app_id) {
+    where += ' AND app_id = ?';
+    params.push(app_id);
+  }
+  if (options.sql_id) {
+    where += ' AND sql_id = ?';
+    params.push(options.sql_id);
+  }
+
+  const db = getDB();
+  const summary = db.prepare(
+    `SELECT
+       COUNT(*) AS total,
+       COALESCE(SUM(success), 0) AS success,
+       COALESCE(AVG(latency_ms), 0) AS avg_latency_ms
+     FROM invoke_logs WHERE ${where}`
+  ).get(...params) as { total: number; success: number; avg_latency_ms: number };
+
+  const total = summary.total || 0;
+  const success = summary.success || 0;
+  const failed = total - success;
+  const avg_latency_ms = total > 0 ? Math.round(summary.avg_latency_ms) : 0;
+
+  const dailyRows = db.prepare(
+    `SELECT
+       date(created_at) AS date,
+       COUNT(*) AS total,
+       COALESCE(SUM(success), 0) AS success
+     FROM invoke_logs
+     WHERE ${where}
+     GROUP BY date(created_at)
+     ORDER BY date ASC`
+  ).all(...params) as Array<{ date: string; total: number; success: number }>;
+
+  const daily: InvokeDailyStat[] = dailyRows.map((row) => ({
+    date: row.date,
+    total: row.total,
+    success: row.success,
+    failed: row.total - row.success
+  }));
+
+  return { total, success, failed, avg_latency_ms, daily };
+}
+
+/** Delete invoke logs older than retentionDays. Returns number of deleted rows. */
+export function purgeInvokeLogs(retentionDays: number): number {
+  const days = retentionDays > 0 ? retentionDays : 30;
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const result = getDB()
+    .prepare('DELETE FROM invoke_logs WHERE created_at < ?')
+    .run(cutoff);
+  return result.changes;
 }

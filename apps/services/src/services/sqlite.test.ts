@@ -14,10 +14,16 @@ import {
   deleteSql,
   getConnection,
   getConnectionConfig,
+  getDB,
+  getInvokeLog,
+  getInvokeStats,
   getSql,
+  insertInvokeLog,
   listApps,
   listConnections,
+  listInvokeLogs,
   listSqls,
+  purgeInvokeLogs,
   removeApp,
   resolveApiKey,
   revokeApiKey,
@@ -185,5 +191,90 @@ describe('sqlite service', function () {
     assert.ok(deleteSql(app.id, sql.id));
     assert.ok(deleteModel(app.id, model.id));
     assert.ok(removeApp(app.id));
+  });
+
+  it('records invoke logs, aggregates stats, and purges expired rows', () => {
+    const app = createApp('stats-app');
+    const conn = createConnection({
+      app_id: app.id,
+      name: 'stats-mysql',
+      type: 'mysql',
+      host: '127.0.0.1',
+      port: 3306,
+      username: 'root',
+      password: 'pass',
+      database: 'stats'
+    });
+    const sql = createSql({
+      app_id: app.id,
+      connection_id: conn.id,
+      name: 'list-users',
+      sql_text: 'SELECT * FROM users',
+      sql_type: 'select',
+      method: 'GET',
+      params: [],
+      review: { passed: true, issues: [] }
+    });
+
+    insertInvokeLog({
+      app_id: app.id,
+      sql_id: sql.id,
+      connection_id: conn.id,
+      method: 'GET',
+      status_code: 200,
+      success: true,
+      latency_ms: 40,
+      row_count: 3,
+      params: JSON.stringify({ limit: 10 })
+    });
+    insertInvokeLog({
+      app_id: app.id,
+      sql_id: sql.id,
+      connection_id: conn.id,
+      method: 'GET',
+      status_code: 405,
+      success: false,
+      error_message: 'Method Not Allowed',
+      latency_ms: 5,
+      row_count: null
+    });
+
+    const listed = listInvokeLogs(app.id, { page: 1, size: 10 });
+    assert.strictEqual(listed.total, 2);
+    assert.strictEqual(listed.list[0].sql_id, sql.id);
+
+    const detail = getInvokeLog(listed.list[1].id);
+    assert.ok(detail);
+    assert.strictEqual(detail!.sql_text, 'SELECT * FROM users');
+    assert.strictEqual(detail!.sql_name, 'list-users');
+    assert.strictEqual(detail!.params, JSON.stringify({ limit: 10 }));
+
+    const failedOnly = listInvokeLogs(app.id, { success: false });
+    assert.strictEqual(failedOnly.total, 1);
+    assert.strictEqual(failedOnly.list[0].status_code, 405);
+
+    const stats = getInvokeStats(app.id, { days: 30, sql_id: sql.id });
+    assert.strictEqual(stats.total, 2);
+    assert.strictEqual(stats.success, 1);
+    assert.strictEqual(stats.failed, 1);
+    assert.ok(stats.avg_latency_ms >= 0);
+    assert.ok(stats.daily.length >= 1);
+
+    const oldCreatedAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    getDB().prepare(
+      `INSERT INTO invoke_logs
+       (app_id, sql_id, connection_id, method, status_code, success,
+        error_message, latency_ms, row_count, created_at)
+       VALUES (?, ?, ?, 'GET', 200, 1, NULL, 10, 1, ?)`
+    ).run(app.id, sql.id, conn.id, oldCreatedAt);
+
+    assert.strictEqual(listInvokeLogs(app.id).total, 3);
+    const deleted = purgeInvokeLogs(30);
+    assert.ok(deleted >= 1);
+    assert.strictEqual(listInvokeLogs(app.id).total, 2);
+
+    // Stats window still excludes purged rows
+    const afterPurge = getInvokeStats(app.id, { days: 30 });
+    assert.strictEqual(afterPurge.total, 2);
   });
 });

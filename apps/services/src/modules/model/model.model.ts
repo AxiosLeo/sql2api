@@ -4,6 +4,7 @@ import type { ModelRecord } from '../../services/sqlite';
 
 export interface ModelDefinition {
   id: string;
+  app_id: string;
   connection_id: string;
   table_name: string;
   comment: string;
@@ -57,6 +58,7 @@ export const modelListQueryRules = {
 export function toModelItem(record: ModelRecord): ModelDefinition {
   return {
     id: record.id,
+    app_id: record.app_id,
     connection_id: record.connection_id,
     table_name: record.table_name,
     comment: record.comment,

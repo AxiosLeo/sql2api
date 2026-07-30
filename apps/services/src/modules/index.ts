@@ -7,6 +7,7 @@ import connectionRouter from './connection/connection.router';
 import invokeRouter from './invoke/invoke.router';
 import modelRouter from './model/model.router';
 import sqlRouter from './sql/sql.router';
+import statRouter from './stat/stat.router';
 
 const defaultHandler = {
   method: 'any',
@@ -42,6 +43,8 @@ logged.add(connectionRouter);
 logged.add(modelRouter);
 logged.add(sqlRouter);
 logged.add(invokeRouter);
+// Stats are dashboard-only: intentionally not mounted on /openapi.
+logged.add(statRouter);
 adminApi.add(logged);
 
 /** Public health under /api (no auth). */
