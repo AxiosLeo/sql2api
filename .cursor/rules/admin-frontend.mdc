@@ -1,0 +1,25 @@
+---
+description: apps/admin 前端（React 19 管理台）结构与编码约定
+globs: apps/admin/**
+alwaysApply: false
+---
+
+# admin 前端约定
+
+## 路由与分层
+
+- TanStack Router 文件式路由：`src/routes/`，分组 `_authenticated`（需登录）、`(auth)`、`(errors)`
+- `src/routeTree.gen.ts` 由 router 插件自动生成，禁止手改
+- 分层：`src/api/`（axios 请求封装，按域拆分文件）→ `src/features/<domain>/`（页面与业务组件：apps、connections、models、sqls、logs、dashboard 等）→ `src/components/`（跨域共享组件，`ui/` 为 shadcn 组件）
+
+## 数据与状态
+
+- 服务端数据用 TanStack Query，请求一律走 `src/api/` 封装
+- 客户端状态用 zustand（`src/stores/`）
+- 表单用 react-hook-form + zod resolver
+- 表格用 TanStack Table（`components/data-table/`）；SQL 编辑器用 `components/sql-editor.tsx`（CodeMirror + lang-sql）
+
+## 样式与格式
+
+- Tailwind CSS 4（vite 插件），类名合并用 `cn()`（`src/lib/utils.ts`）
+- 提交前 `pnpm format`（prettier：import 排序 + tailwind 类排序插件）；`pnpm lint` 走 eslint
