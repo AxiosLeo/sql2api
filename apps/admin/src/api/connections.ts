@@ -60,6 +60,23 @@ export interface TestConnectionResult {
   latency_ms?: number
 }
 
+export interface ProbeConnectionBody {
+  type: DatasourceType
+  host: string
+  port: number
+  username: string
+  password?: string
+  database?: string
+  connection_id?: string
+  action?: 'test' | 'databases'
+}
+
+export interface ListDatabasesResult {
+  supported: boolean
+  databases: string[]
+  message?: string
+}
+
 export function listConnections(
   params: ConnectionListQuery = {}
 ): Promise<ConnectionListData> {
@@ -104,5 +121,16 @@ export function testConnection(id: string): Promise<TestConnectionResult> {
   return apiRequest<TestConnectionResult>({
     method: 'POST',
     url: `/api/connections/${id}/test`,
+  })
+}
+
+/** Read-only probe — never creates a connection record. */
+export function probeConnection(
+  body: ProbeConnectionBody
+): Promise<TestConnectionResult | ListDatabasesResult> {
+  return apiRequest<TestConnectionResult | ListDatabasesResult>({
+    method: 'POST',
+    url: '/api/connections/probe',
+    data: body,
   })
 }

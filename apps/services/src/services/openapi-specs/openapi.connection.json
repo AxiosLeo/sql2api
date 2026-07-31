@@ -345,6 +345,67 @@
           }
         }
       }
+    },
+    "/openapi/connections/probe": {
+      "post": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "探测连通性或列出数据库（只读，不落库）",
+        "description": "使用表单凭证探测目标库。action=test 测通；action=databases 列库。编辑时可省略 password 并传 connection_id。绝不创建/更新连接记录。",
+        "operationId": "probeConnection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeConnectionBody"
+              },
+              "example": {
+                "type": "mysql",
+                "host": "127.0.0.1",
+                "port": 13306,
+                "username": "root",
+                "password": "your-password",
+                "action": "test"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "探测完成",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TestConnectionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ListDatabasesResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -717,6 +778,72 @@
           }
         }
       },
+      "ProbeConnectionBody": {
+        "type": "object",
+        "required": [
+          "type",
+          "host",
+          "port",
+          "username"
+        ],
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/DatasourceType"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "description": "Required unless connection_id is provided"
+          },
+          "database": {
+            "type": "string"
+          },
+          "connection_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Load stored password when form password is blank"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "test",
+              "databases"
+            ],
+            "default": "test"
+          }
+        }
+      },
+      "ListDatabasesData": {
+        "type": "object",
+        "required": [
+          "supported",
+          "databases"
+        ],
+        "properties": {
+          "supported": {
+            "type": "boolean"
+          },
+          "databases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "DeletedData": {
         "type": "object",
         "required": [
@@ -776,6 +903,21 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/TestConnectionData"
+              }
+            }
+          }
+        ]
+      },
+      "ListDatabasesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ListDatabasesData"
               }
             }
           }

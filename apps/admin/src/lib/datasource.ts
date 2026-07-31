@@ -94,3 +94,11 @@ export const DATASOURCE_SELECT_ITEMS = DATASOURCE_TYPES.map((value) => ({
 export function isDatasourceType(value: string): value is DatasourceType {
   return (DATASOURCE_TYPES as readonly string[]).includes(value)
 }
+
+/** Whether probe can list catalogs/databases for this type. Oracle uses Service Name. */
+export function supportsDatabaseListing(
+  type: DatasourceType | string | undefined | null
+): boolean {
+  if (!type || !isDatasourceType(type)) return false
+  return datasourceProtocol(type) !== 'oracle'
+}

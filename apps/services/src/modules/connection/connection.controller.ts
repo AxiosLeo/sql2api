@@ -3,6 +3,7 @@ import { BaseController } from '../controller';
 import type {
   ConnectionListQuery,
   CreateConnectionBody,
+  ProbeConnectionBody,
   UpdateConnectionBody
 } from './connection.model';
 import { toConnectionItem } from './connection.model';
@@ -14,7 +15,11 @@ import {
   listConnections,
   updateConnection
 } from '../../services/sqlite';
-import { testConnection } from '../../services/datasource';
+import {
+  listDatabases,
+  testConnection,
+  type DatasourceConfig
+} from '../../services/datasource';
 
 export class ConnectionController extends BaseController {
   async create(context: KoaContext) {
@@ -120,6 +125,47 @@ export class ConnectionController extends BaseController {
       this.error(404, 'Not Found');
     }
     const result = await testConnection(config!);
+    this.success(result);
+  }
+
+  /**
+   * Read-only probe using form credentials (or stored password via connection_id).
+   * Never creates / updates connection records.
+   */
+  async probe(context: KoaContext) {
+    const appId = this.appId(context);
+    const body = (context.body || {}) as ProbeConnectionBody;
+    const action = body.action || 'test';
+    const password = (body.password || '').trim();
+
+    let resolvedPassword = password;
+    if (!resolvedPassword) {
+      if (!body.connection_id) {
+        this.error(400, 'password is required when connection_id is omitted');
+      }
+      const stored = getConnectionConfig(appId, body.connection_id!);
+      if (!stored) {
+        this.error(404, 'Connection not found');
+      }
+      resolvedPassword = stored!.password;
+    }
+
+    const config: DatasourceConfig = {
+      type: body.type,
+      host: body.host,
+      port: Number(body.port),
+      username: body.username,
+      password: resolvedPassword,
+      database: body.database || ''
+    };
+
+    if (action === 'databases') {
+      const result = await listDatabases(config);
+      this.success(result);
+      return;
+    }
+
+    const result = await testConnection(config);
     this.success(result);
   }
 }

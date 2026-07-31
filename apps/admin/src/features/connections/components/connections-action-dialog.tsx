@@ -1,12 +1,19 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { Cable, Database } from 'lucide-react'
 import { toast } from 'sonner'
 import { listApps } from '@/api/apps'
-import { createConnection, updateConnection } from '@/api/connections'
+import {
+  createConnection,
+  probeConnection,
+  updateConnection,
+  type ListDatabasesResult,
+  type TestConnectionResult,
+} from '@/api/connections'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -32,6 +39,7 @@ import {
   DATASOURCE_SELECT_ITEMS,
   DATASOURCE_TYPES,
   isDatasourceType,
+  supportsDatabaseListing,
   type DatasourceType,
 } from '@/lib/datasource'
 import { type Connection } from '../data/schema'
@@ -63,6 +71,12 @@ type ConnectionsActionDialogProps = {
   onOpenChange: (open: boolean) => void
 }
 
+function isTestResult(
+  data: TestConnectionResult | ListDatabasesResult
+): data is TestConnectionResult {
+  return 'ok' in data
+}
+
 export function ConnectionsActionDialog({
   currentRow,
   open,
@@ -70,6 +84,8 @@ export function ConnectionsActionDialog({
 }: ConnectionsActionDialogProps) {
   const isEdit = !!currentRow
   const queryClient = useQueryClient()
+  const [probeOk, setProbeOk] = useState(false)
+  const [databases, setDatabases] = useState<string[]>([])
 
   const appsQuery = useQuery({
     queryKey: ['apps', { page: 1, size: 100 }],
@@ -95,6 +111,8 @@ export function ConnectionsActionDialog({
 
   useEffect(() => {
     if (!open) return
+    setProbeOk(false)
+    setDatabases([])
     if (currentRow) {
       form.reset({
         app_id: currentRow.app_id,
@@ -121,6 +139,95 @@ export function ConnectionsActionDialog({
       })
     }
   }, [open, currentRow, form])
+
+  const watchedType = form.watch('type')
+  const watchedHost = form.watch('host')
+  const watchedPort = form.watch('port')
+  const watchedUsername = form.watch('username')
+  const watchedPassword = form.watch('password')
+
+  useEffect(() => {
+    setProbeOk(false)
+    setDatabases([])
+  }, [watchedType, watchedHost, watchedPort, watchedUsername, watchedPassword])
+
+  const buildProbeBody = (
+    values: ConnectionForm,
+    action: 'test' | 'databases'
+  ) => {
+    const password = values.password?.trim() || undefined
+    return {
+      type: values.type,
+      host: values.host,
+      port: values.port,
+      username: values.username,
+      password,
+      database: values.database || undefined,
+      connection_id:
+        !password && isEdit && currentRow ? currentRow.id : undefined,
+      action,
+    }
+  }
+
+  const probeMutation = useMutation({
+    mutationFn: async (action: 'test' | 'databases') => {
+      const values = form.getValues()
+      if (!isEdit && !values.password?.trim()) {
+        throw new Error('Password is required.')
+      }
+      if (
+        !values.host?.trim() ||
+        !values.username?.trim() ||
+        !values.type
+      ) {
+        throw new Error('Host, type, and username are required.')
+      }
+      return probeConnection(buildProbeBody(values, action))
+    },
+    onSuccess: (data, action) => {
+      if (action === 'test') {
+        if (!isTestResult(data)) return
+        if (data.ok) {
+          setProbeOk(true)
+          const latency =
+            typeof data.latency_ms === 'number'
+              ? ` (${data.latency_ms}ms)`
+              : ''
+          toast.success(`Connected${latency}`)
+          return
+        }
+        setProbeOk(false)
+        setDatabases([])
+        toast.error(data.message || 'Connection test failed.')
+        return
+      }
+      if (isTestResult(data)) return
+      if (!data.supported) {
+        toast.message(data.message || 'Database listing is not supported.')
+        setDatabases([])
+        return
+      }
+      setDatabases(data.databases)
+      if (data.databases.length === 0) {
+        toast.message(data.message || 'No databases returned.')
+        return
+      }
+      toast.success(`Loaded ${data.databases.length} database(s).`)
+    },
+    onError: (err) => {
+      if (err instanceof Error && err.message === 'Password is required.') {
+        form.setError('password', { message: 'Password is required.' })
+        return
+      }
+      const message =
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string })?.message || err.message
+          : err instanceof Error
+            ? err.message
+            : 'Probe failed.'
+      toast.error(message)
+    },
+  })
 
   const mutation = useMutation({
     mutationFn: async (values: ConnectionForm) => {
@@ -203,32 +310,39 @@ export function ConnectionsActionDialog({
     }
   }
 
-  const watchedType = form.watch('type')
+  const canListDatabases =
+    probeOk && supportsDatabaseListing(watchedType)
+
+  const databaseListId = 'connection-database-options'
 
   return (
     <Dialog
       open={open}
       onOpenChange={(state) => {
-        if (!state) form.reset()
+        if (!state) {
+          form.reset()
+          setProbeOk(false)
+          setDatabases([])
+        }
         onOpenChange(state)
       }}
     >
-      <DialogContent className='sm:max-w-lg'>
+      <DialogContent className='flex max-h-[90vh] w-full flex-col sm:max-w-3xl'>
         <DialogHeader className='text-start'>
           <DialogTitle>
             {isEdit ? 'Edit Connection' : 'Add Connection'}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? 'Update connection details. Leave password blank to keep the current password.'
-              : 'Create a new database connection. Click save when you are done.'}
+              ? 'Update connection details. Leave password blank to keep the current password. Use Test Connection to verify without saving.'
+              : 'Create a new database connection. Test connectivity before saving — testing never creates a record.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form
             id='connection-form'
             onSubmit={form.handleSubmit(onSubmit)}
-            className='space-y-4'
+            className='min-h-0 flex-1 space-y-4 overflow-y-auto pr-1'
           >
             {isEdit ? (
               <FormItem>
@@ -358,14 +472,54 @@ export function ConnectionsActionDialog({
                   <FormLabel>
                     {watchedType === 'oracle' ? 'Service Name' : 'Database'}
                   </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={
-                        watchedType === 'oracle' ? 'ORCLPDB1' : 'demo'
-                      }
-                      {...field}
-                    />
-                  </FormControl>
+                  <div className='flex gap-2'>
+                    <FormControl>
+                      <Input
+                        list={
+                          databases.length > 0 ? databaseListId : undefined
+                        }
+                        placeholder={
+                          watchedType === 'oracle' ? 'ORCLPDB1' : 'demo'
+                        }
+                        {...field}
+                      />
+                    </FormControl>
+                    {canListDatabases && (
+                      <Button
+                        type='button'
+                        variant='outline'
+                        disabled={probeMutation.isPending}
+                        onClick={() => probeMutation.mutate('databases')}
+                      >
+                        <Database className='mr-1 size-4' />
+                        {probeMutation.isPending &&
+                        probeMutation.variables === 'databases'
+                          ? 'Loading...'
+                          : 'Load DBs'}
+                      </Button>
+                    )}
+                  </div>
+                  {databases.length > 0 && (
+                    <datalist id={databaseListId}>
+                      {databases.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                  )}
+                  {watchedType === 'oracle' && (
+                    <p className='text-muted-foreground text-xs'>
+                      Oracle uses a Service Name; catalog listing is not
+                      available.
+                    </p>
+                  )}
+                  {probeOk &&
+                    supportsDatabaseListing(watchedType) &&
+                    databases.length === 0 && (
+                      <p className='text-muted-foreground text-xs'>
+                        Connection OK. Click Load DBs to pick from a list, or
+                        type a name.
+                      </p>
+                    )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -394,7 +548,18 @@ export function ConnectionsActionDialog({
             )}
           </form>
         </Form>
-        <DialogFooter>
+        <DialogFooter className='gap-2 sm:justify-between'>
+          <Button
+            type='button'
+            variant='outline'
+            disabled={probeMutation.isPending || mutation.isPending}
+            onClick={() => probeMutation.mutate('test')}
+          >
+            <Cable className='mr-1 size-4' />
+            {probeMutation.isPending && probeMutation.variables === 'test'
+              ? 'Testing...'
+              : 'Test Connection'}
+          </Button>
           <Button
             type='submit'
             form='connection-form'

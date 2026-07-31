@@ -52,6 +52,21 @@ export interface TestConnectionResult {
   latency_ms?: number;
 }
 
+/** Body for POST /connections/probe — read-only, never writes meta DB. */
+export interface ProbeConnectionBody {
+  type: DatasourceType;
+  host: string;
+  port: number;
+  username: string;
+  /** Required unless connection_id is provided (edit with blank password). */
+  password?: string;
+  database?: string;
+  /** When password is omitted, load credentials from this saved connection. */
+  connection_id?: string;
+  /** Default: test */
+  action?: 'test' | 'databases';
+}
+
 export const createConnectionRules = {
   name: 'required|string|max:64',
   type: `required|in:${DATASOURCE_TYPE_IN_RULE}`,
@@ -72,6 +87,17 @@ export const updateConnectionRules = {
   password: 'string',
   database: 'string',
   status: 'in:active,disabled'
+};
+
+export const probeConnectionRules = {
+  type: `required|in:${DATASOURCE_TYPE_IN_RULE}`,
+  host: 'required|string',
+  port: 'required|integer|min:1|max:65535',
+  username: 'required|string',
+  password: 'string',
+  database: 'string',
+  connection_id: 'string',
+  action: 'in:test,databases'
 };
 
 export const connectionIdRules = {

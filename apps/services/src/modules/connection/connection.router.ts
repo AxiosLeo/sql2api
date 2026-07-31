@@ -4,6 +4,7 @@ import {
   connectionIdRules,
   connectionListQueryRules,
   createConnectionRules,
+  probeConnectionRules,
   updateConnectionRules
 } from './connection.model';
 
@@ -15,6 +16,11 @@ router.post('', (ctx) => controller.create(ctx), {
 
 router.get('', (ctx) => controller.list(ctx), {
   query: { rules: connectionListQueryRules }
+});
+
+/** Must be registered before /{:id} so "probe" is not captured as an id. */
+router.post('/probe', (ctx) => controller.probe(ctx), {
+  body: { rules: probeConnectionRules }
 });
 
 router.get('/{:id}', (ctx) => controller.detail(ctx), {

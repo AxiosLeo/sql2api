@@ -293,7 +293,8 @@ async function withMysql<T>(
       port: config.port,
       user: config.username,
       password: config.password,
-      database: config.database,
+      // Allow empty database for probe / SHOW DATABASES
+      ...(config.database ? { database: config.database } : {}),
       connectTimeout: CONNECT_TIMEOUT_MS,
       namedPlaceholders: true
     });
@@ -1292,7 +1293,112 @@ function adapterFor(config: DatasourceConfig): DatasourceAdapter {
  * Failures return ok:false instead of throwing.
  */
 export async function testConnection(config: DatasourceConfig): Promise<TestConnectionResult> {
-  return adapterFor(config).testConnection(config);
+  const protocol = datasourceProtocol(config.type);
+  // When database is blank, fall back to a catalog DB so probe works before pick.
+  const probeConfig: DatasourceConfig = { ...config };
+  if (!probeConfig.database?.trim()) {
+    if (protocol === 'postgresql') {
+      probeConfig.database = 'postgres';
+    } else if (protocol === 'sqlserver') {
+      probeConfig.database = 'master';
+    }
+  }
+  return adapterFor(probeConfig).testConnection(probeConfig);
+}
+
+export interface ListDatabasesResult {
+  supported: boolean;
+  databases: string[];
+  message?: string;
+}
+
+/**
+ * List databases / catalogs visible to the given credentials.
+ * Oracle is unsupported (Service Name semantics). Does not write meta DB.
+ */
+export async function listDatabases(
+  config: DatasourceConfig
+): Promise<ListDatabasesResult> {
+  const protocol = datasourceProtocol(config.type);
+
+  if (protocol === 'oracle') {
+    return {
+      supported: false,
+      databases: [],
+      message: 'Oracle uses a Service Name; database listing is not supported.'
+    };
+  }
+
+  try {
+    if (protocol === 'mysql') {
+      const names = await withMysql(
+        { ...config, database: '' },
+        async (conn) => {
+          const [rows] = await conn.query('SHOW DATABASES');
+          return (rows as Array<Record<string, string>>).map((r) => {
+            const key = Object.keys(r)[0];
+            return String(r[key]);
+          });
+        }
+      );
+      return { supported: true, databases: names.sort() };
+    }
+
+    if (protocol === 'postgresql') {
+      const catalogCandidates = ['postgres', 'template1'];
+      let lastErr: unknown;
+      for (const catalog of catalogCandidates) {
+        try {
+          const names = await withPg(
+            { ...config, database: catalog },
+            async (client) => {
+              const result = await client.query(
+                `SELECT datname AS name
+                 FROM pg_database
+                 WHERE datistemplate = false
+                 ORDER BY datname`
+              );
+              return result.rows.map((r) => String(r.name));
+            }
+          );
+          return { supported: true, databases: names };
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      const message =
+        lastErr instanceof Error ? lastErr.message : String(lastErr);
+      return {
+        supported: true,
+        databases: [],
+        message: `Unable to list databases: ${message}`
+      };
+    }
+
+    // sqlserver
+    const names = await withMssql(
+      { ...config, database: 'master' },
+      async (pool) => {
+        const result = await pool.request().query(
+          `SELECT name
+           FROM sys.databases
+           WHERE database_id > 4
+           ORDER BY name`
+        );
+        return (result.recordset || []).map((r: { name: string }) =>
+          String(r.name)
+        );
+      }
+    );
+    return { supported: true, databases: names };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      supported: true,
+      databases: [],
+      message
+    };
+  }
 }
 
 /**
