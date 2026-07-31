@@ -101,6 +101,7 @@ ADMIN_PASSWORD=change-me   # 必须非空，否则无法登录管理后台
 # OLLAMA_BASE_URL=http://127.0.0.1:11434
 # OLLAMA_MODEL=gpt-oss:20b
 # OLLAMA_TIMEOUT_MS=120000
+# OLLAMA_API_KEY=              # 可选；反代鉴权用的 Bearer Token
 ```
 
 管理台 **System Settings** 可在运行时覆盖上述配置（存入 SQLite）。
@@ -137,6 +138,7 @@ pnpm --filter sql2api-admin run dev
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama HTTP 基址（`AI_PROVIDER=ollama` 时） |
 | `OLLAMA_MODEL` | `gpt-oss:20b` | Ollama 模型名 |
 | `OLLAMA_TIMEOUT_MS` | `120000` | Ollama 请求超时（毫秒） |
+| `OLLAMA_API_KEY` | _(空)_ | 可选；反代鉴权用的 Bearer Token；为空则不发送鉴权头 |
 
 在线覆盖：管理台 **System Settings** 将 provider / Ollama 选项存入 SQLite，优先级高于环境变量（Reset 可清除在线配置）。
 

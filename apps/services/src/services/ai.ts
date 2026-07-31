@@ -11,7 +11,7 @@ import type {
 } from '../types';
 import { SQL_TYPE_TO_METHOD } from '../types';
 import { analyzeSql, staticAuditSql } from '../modules/sql/sql.model';
-import { getSettingJSON } from './sqlite';
+import { decryptPassword, getSettingJSON } from './sqlite';
 import { reconcileSqlParams, slugifyApiName } from './sql-text';
 
 export type AIProvider = 'local' | 'ollama';
@@ -23,6 +23,8 @@ export interface AIOnlineSettings {
     base_url?: string;
     model?: string;
     timeout_ms?: number;
+    /** Encrypted (or legacy plaintext) when stored online. */
+    api_key?: string;
   };
 }
 
@@ -33,9 +35,30 @@ export interface AIResolvedConfig {
     base_url: string;
     model: string;
     timeout_ms: number;
+    /** Plaintext API key for Authorization: Bearer (empty = no auth). */
+    api_key: string;
   };
   /** Whether an online settings row exists (even if partial). */
   source: 'online' | 'env';
+}
+
+/**
+ * Decrypt an online-stored Ollama API key.
+ * Falls back to the raw value when decryption fails (legacy plaintext).
+ */
+export function resolveOllamaApiKey(stored: string | undefined | null): string {
+  if (!stored || typeof stored !== 'string') {
+    return '';
+  }
+  const trimmed = stored.trim();
+  if (!trimmed) {
+    return '';
+  }
+  try {
+    return decryptPassword(trimmed);
+  } catch {
+    return trimmed;
+  }
 }
 
 export interface AIGenerateResult {
@@ -208,7 +231,8 @@ export function getEnvAIConfig(): Omit<AIResolvedConfig, 'source'> {
         Number.isFinite(config.envs.ai.ollama.timeout_ms)
         && config.envs.ai.ollama.timeout_ms > 0
           ? config.envs.ai.ollama.timeout_ms
-          : 120000
+          : 120000,
+      api_key: (config.envs.ai.ollama.api_key || '').trim()
     }
   };
 }
@@ -246,6 +270,11 @@ export function resolveAIConfig(): AIResolvedConfig {
       ? timeoutRaw
       : env.ollama.timeout_ms;
 
+  const onlineApiKey =
+    typeof ollamaOnline.api_key === 'string' && ollamaOnline.api_key.trim()
+      ? resolveOllamaApiKey(ollamaOnline.api_key)
+      : '';
+
   return {
     provider,
     model_path,
@@ -258,7 +287,8 @@ export function resolveAIConfig(): AIResolvedConfig {
         typeof ollamaOnline.model === 'string' && ollamaOnline.model.trim()
           ? ollamaOnline.model.trim()
           : env.ollama.model,
-      timeout_ms
+      timeout_ms,
+      api_key: onlineApiKey || env.ollama.api_key
     },
     source: 'online'
   };
@@ -426,9 +456,16 @@ async function runWithOllama<T>(
   const timer = setTimeout(() => controller.abort(), cfg.ollama.timeout_ms);
 
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (cfg.ollama.api_key) {
+      headers.Authorization = `Bearer ${cfg.ollama.api_key}`;
+    }
+
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       signal: controller.signal,
       body: JSON.stringify({
         model: cfg.ollama.model,

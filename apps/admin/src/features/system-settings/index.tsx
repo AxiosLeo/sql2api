@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { z } from 'zod'
-import { useForm } from 'react-hook-form'
+import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
@@ -28,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -55,6 +56,7 @@ const formSchema = z.object({
   ollama_base_url: z.string().optional(),
   ollama_model: z.string().optional(),
   ollama_timeout_ms: z.coerce.number().int().min(1000).optional(),
+  ollama_api_key: z.string().optional(),
 })
 
 type SettingsForm = z.infer<typeof formSchema>
@@ -63,6 +65,8 @@ export function SystemSettings() {
   const queryClient = useQueryClient()
   const [modelOptions, setModelOptions] = useState<string[]>([])
   const [testedVersion, setTestedVersion] = useState<string | null>(null)
+  const [removeApiKey, setRemoveApiKey] = useState(false)
+  const [onlineApiKeySet, setOnlineApiKeySet] = useState(false)
 
   const settingsQuery = useQuery({
     queryKey: ['settings', 'ai'],
@@ -70,13 +74,14 @@ export function SystemSettings() {
   })
 
   const form = useForm<SettingsForm>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as Resolver<SettingsForm>,
     defaultValues: {
       provider: 'local',
       model_path: '',
       ollama_base_url: 'http://127.0.0.1:11434',
       ollama_model: 'gpt-oss:20b',
       ollama_timeout_ms: 120000,
+      ollama_api_key: '',
     },
   })
 
@@ -93,7 +98,10 @@ export function SystemSettings() {
       ollama_model: online?.ollama?.model || eff.ollama.model || 'gpt-oss:20b',
       ollama_timeout_ms:
         online?.ollama?.timeout_ms || eff.ollama.timeout_ms || 120000,
+      ollama_api_key: '',
     })
+    setOnlineApiKeySet(Boolean(online?.ollama?.api_key_set))
+    setRemoveApiKey(false)
     if (eff.ollama.model) {
       setModelOptions((prev) =>
         prev.includes(eff.ollama.model) ? prev : [eff.ollama.model, ...prev]
@@ -102,18 +110,33 @@ export function SystemSettings() {
   }, [settingsQuery.data, form])
 
   const provider = form.watch('provider')
+  const apiKeyInput = form.watch('ollama_api_key')
 
   const saveMutation = useMutation({
-    mutationFn: (values: SettingsForm) =>
-      updateAiSettings({
+    mutationFn: (values: SettingsForm) => {
+      const ollama: {
+        base_url?: string
+        model?: string
+        timeout_ms?: number
+        api_key?: string
+      } = {
+        base_url: values.ollama_base_url?.trim() || undefined,
+        model: values.ollama_model?.trim() || undefined,
+        timeout_ms: values.ollama_timeout_ms,
+      }
+      const typed = values.ollama_api_key?.trim()
+      if (typed) {
+        ollama.api_key = typed
+      } else if (removeApiKey) {
+        ollama.api_key = ''
+      }
+      // else omit api_key → keep existing
+      return updateAiSettings({
         provider: values.provider,
         model_path: values.model_path?.trim() || undefined,
-        ollama: {
-          base_url: values.ollama_base_url?.trim() || undefined,
-          model: values.ollama_model?.trim() || undefined,
-          timeout_ms: values.ollama_timeout_ms,
-        },
-      }),
+        ollama,
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings', 'ai'] })
       toast.success('AI settings saved. Changes take effect immediately.')
@@ -143,10 +166,13 @@ export function SystemSettings() {
   })
 
   const testMutation = useMutation({
-    mutationFn: () =>
-      testAiConnection({
+    mutationFn: () => {
+      const typed = form.getValues('ollama_api_key')?.trim()
+      return testAiConnection({
         base_url: form.getValues('ollama_base_url')?.trim() || undefined,
-      }),
+        api_key: typed || undefined,
+      })
+    },
     onSuccess: (result) => {
       setTestedVersion(result.version || 'ok')
       setModelOptions(result.models || [])
@@ -235,9 +261,14 @@ export function SystemSettings() {
                   {effective?.provider || '—'}
                 </Badge>
                 {effective?.provider === 'ollama' ? (
-                  <span className='text-muted-foreground'>
-                    {effective.ollama.model} @ {effective.ollama.base_url}
-                  </span>
+                  <>
+                    <span className='text-muted-foreground'>
+                      {effective.ollama.model} @ {effective.ollama.base_url}
+                    </span>
+                    {effective.ollama.api_key_set ? (
+                      <Badge variant='outline'>API key</Badge>
+                    ) : null}
+                  </>
                 ) : (
                   <span className='text-muted-foreground'>
                     {effective?.model_path || '(no local model path)'}
@@ -376,6 +407,60 @@ export function SystemSettings() {
                                 : ''}
                               .
                             </FormDescription>
+                          ) : null}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name='ollama_api_key'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>API Key</FormLabel>
+                          <FormControl>
+                            <Input
+                              type='password'
+                              autoComplete='off'
+                              placeholder={
+                                onlineApiKeySet
+                                  ? 'Saved — leave blank to keep'
+                                  : 'Optional Bearer token (OLLAMA_API_KEY)'
+                              }
+                              {...field}
+                              onChange={(e) => {
+                                field.onChange(e)
+                                if (e.target.value) {
+                                  setRemoveApiKey(false)
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Sent as{' '}
+                            <code className='text-xs'>
+                              Authorization: Bearer …
+                            </code>{' '}
+                            when calling Ollama. Leave blank to keep the saved
+                            key.
+                          </FormDescription>
+                          {onlineApiKeySet && !apiKeyInput?.trim() ? (
+                            <div className='flex items-center gap-2 pt-1'>
+                              <Checkbox
+                                id='remove-api-key'
+                                checked={removeApiKey}
+                                onCheckedChange={(checked) =>
+                                  setRemoveApiKey(checked === true)
+                                }
+                              />
+                              <Label
+                                htmlFor='remove-api-key'
+                                className='text-sm font-normal text-muted-foreground'
+                              >
+                                Remove saved key
+                              </Label>
+                            </div>
                           ) : null}
                           <FormMessage />
                         </FormItem>

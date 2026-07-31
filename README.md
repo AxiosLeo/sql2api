@@ -101,6 +101,7 @@ ADMIN_PASSWORD=change-me   # must be non-empty to enable admin login
 # OLLAMA_BASE_URL=http://127.0.0.1:11434
 # OLLAMA_MODEL=gpt-oss:20b
 # OLLAMA_TIMEOUT_MS=120000
+# OLLAMA_API_KEY=              # optional Bearer token for reverse-proxied Ollama
 ```
 
 Admin Console → **System Settings** can override these at runtime (stored in SQLite).
@@ -136,6 +137,7 @@ Environment variables used by `apps/services` (`src/config.ts`):
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama HTTP base URL (when `AI_PROVIDER=ollama`) |
 | `OLLAMA_MODEL` | `gpt-oss:20b` | Ollama model name |
 | `OLLAMA_TIMEOUT_MS` | `120000` | Ollama request timeout in milliseconds |
+| `OLLAMA_API_KEY` | _(empty)_ | Optional Bearer token for reverse-proxied Ollama; empty = no auth header |
 
 Online overrides: Admin Console → **System Settings** stores provider/Ollama options in SQLite and takes precedence over env vars (Reset clears online config).
 

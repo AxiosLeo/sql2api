@@ -6,6 +6,7 @@ export interface AIOllamaConfig {
   base_url: string
   model: string
   timeout_ms: number
+  api_key_set: boolean
 }
 
 export interface AIOnlineSettings {
@@ -15,6 +16,7 @@ export interface AIOnlineSettings {
     base_url?: string
     model?: string
     timeout_ms?: number
+    api_key_set: boolean
   }
 }
 
@@ -40,6 +42,12 @@ export interface UpdateAiSettingsBody {
     base_url?: string
     model?: string
     timeout_ms?: number
+    /**
+     * Omit = keep existing online key;
+     * empty string = clear;
+     * non-empty = replace.
+     */
+    api_key?: string
   }
 }
 
@@ -75,6 +83,7 @@ export function resetAiSettings(): Promise<AISettingsResponse> {
 
 export function testAiConnection(body?: {
   base_url?: string
+  api_key?: string
 }): Promise<TestAiConnectionResult> {
   return apiRequest<TestAiConnectionResult>({
     url: '/api/settings/ai/test',

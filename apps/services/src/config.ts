@@ -33,7 +33,8 @@ export default {
         model: process.env.OLLAMA_MODEL || 'gpt-oss:20b',
         timeout_ms: process.env.OLLAMA_TIMEOUT_MS
           ? parseInt(process.env.OLLAMA_TIMEOUT_MS, 10)
-          : 120000
+          : 120000,
+        api_key: process.env.OLLAMA_API_KEY || ''
       }
     },
     mysql: {
