@@ -7,7 +7,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { listApps } from '@/api/apps'
 import { cn } from '@/lib/utils'
 import { type NavigateFn, useTableUrlState } from '@/hooks/use-table-url-state'
@@ -42,7 +42,7 @@ export function AppsTable({ search, navigate }: AppsTableProps) {
     navigate,
     pagination: {
       defaultPage: 1,
-      defaultPageSize: 20,
+      defaultPageSize: 10,
       pageSizeKey: 'size',
     },
     globalFilter: { enabled: true, key: 'keyword' },
@@ -59,6 +59,7 @@ export function AppsTable({ search, navigate }: AppsTableProps) {
   const { data, isLoading, isFetching, isError, error } = useQuery({
     queryKey: ['apps', { page, size, keyword }],
     queryFn: () => listApps({ page, size, keyword }),
+    placeholderData: keepPreviousData,
   })
 
   const list = data?.list ?? []
@@ -87,8 +88,9 @@ export function AppsTable({ search, navigate }: AppsTableProps) {
   })
 
   useEffect(() => {
+    if (!data) return
     ensurePageInRange(pageCount)
-  }, [pageCount, ensurePageInRange])
+  }, [data, pageCount, ensurePageInRange])
 
   return (
     <div className='flex flex-1 flex-col gap-4'>

@@ -7,7 +7,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { listApps } from '@/api/apps'
 import { listConnections } from '@/api/connections'
 import { cn } from '@/lib/utils'
@@ -50,7 +50,7 @@ export function ConnectionsTable({ search, navigate }: ConnectionsTableProps) {
     navigate,
     pagination: {
       defaultPage: 1,
-      defaultPageSize: 20,
+      defaultPageSize: 10,
       pageSizeKey: 'size',
     },
     globalFilter: { enabled: true, key: 'keyword' },
@@ -95,6 +95,7 @@ export function ConnectionsTable({ search, navigate }: ConnectionsTableProps) {
         keyword,
         app_id: appId,
       }),
+    placeholderData: keepPreviousData,
   })
 
   const list = data?.list ?? []
@@ -123,8 +124,9 @@ export function ConnectionsTable({ search, navigate }: ConnectionsTableProps) {
   })
 
   useEffect(() => {
+    if (!data) return
     ensurePageInRange(pageCount)
-  }, [pageCount, ensurePageInRange])
+  }, [data, pageCount, ensurePageInRange])
 
   const onAppFilterChange = (value: string) => {
     navigate({
