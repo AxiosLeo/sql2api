@@ -3,17 +3,67 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import {
+  filterNamedParamIssues,
   getEnvAIConfig,
   parseOllamaJsonContent,
   resolveAIConfig,
   resolveOllamaApiKey
 } from './ai';
+import type { ReviewIssue } from '../types';
 import {
   closeDB,
   deleteSetting,
   encryptPassword,
   setSettingJSON
 } from './sqlite';
+
+describe('filterNamedParamIssues', () => {
+  it('drops "MySQL does not support named parameters" style errors', () => {
+    const issues: ReviewIssue[] = [
+      {
+        severity: 'error',
+        message:
+          'MySQL does not support named parameters such as :start_date and :end_date in plain SQL. Use \'?\' placeholders or bind variables instead.',
+        suggestion:
+          "Replace ':start_date' with '?' and provide the value via a prepared statement, or use user-defined variables like @start_date if appropriate."
+      },
+      {
+        severity: 'warning',
+        message: 'The query selects all columns from water_statistics; prefer an explicit column list.'
+      }
+    ];
+    const filtered = filterNamedParamIssues(issues, ['start_date', 'end_date']);
+    assert.strictEqual(filtered.length, 1);
+    assert.strictEqual(filtered[0].severity, 'warning');
+    assert.ok(!filtered.some((i) => i.severity === 'error'));
+  });
+
+  it('keeps real errors unrelated to named placeholders', () => {
+    const issues: ReviewIssue[] = [
+      {
+        severity: 'error',
+        message: 'DELETE statements are forbidden.'
+      },
+      {
+        severity: 'error',
+        message: 'Clear SQL injection risk: concatenating user input into the query string.'
+      }
+    ];
+    const filtered = filterNamedParamIssues(issues, ['id']);
+    assert.strictEqual(filtered.length, 2);
+  });
+
+  it('drops issues that cite declared :name with unsupported/syntax complaints', () => {
+    const issues: ReviewIssue[] = [
+      {
+        severity: 'error',
+        message: 'Invalid syntax near :user_id for this dialect.'
+      }
+    ];
+    const filtered = filterNamedParamIssues(issues, ['user_id']);
+    assert.strictEqual(filtered.length, 0);
+  });
+});
 
 describe('parseOllamaJsonContent', () => {
   it('parses plain JSON', () => {

@@ -5,6 +5,7 @@ import config from '../config';
 import type {
   ColumnDefinition,
   DatasourceType,
+  ReviewIssue,
   ReviewResult,
   SqlParamDef,
   SqlType
@@ -12,7 +13,7 @@ import type {
 import { SQL_TYPE_TO_METHOD } from '../types';
 import { analyzeSql, staticAuditSql } from '../modules/sql/sql.model';
 import { decryptPassword, getSettingJSON } from './sqlite';
-import { reconcileSqlParams, slugifyApiName } from './sql-text';
+import { extractNamedParams, reconcileSqlParams, slugifyApiName } from './sql-text';
 
 export type AIProvider = 'local' | 'ollama';
 
@@ -600,6 +601,43 @@ function toGenerateResult(result: {
 }
 
 /**
+ * Drop AI review issues that incorrectly flag platform `:name` placeholders
+ * as dialect syntax errors / unsupported named parameters / injection risks.
+ * Small local models often ignore the PLATFORM CONVENTION prompt rule.
+ */
+export function filterNamedParamIssues(
+  issues: ReviewIssue[],
+  paramNames: string[]
+): ReviewIssue[] {
+  if (!issues.length) {
+    return issues;
+  }
+
+  const nameSet = new Set(paramNames.map((n) => n.toLowerCase()));
+  const namedParamPhrase =
+    /\bnamed\s+(parameters?|placeholders?)\b|\bbind\s+variables?\b/i;
+  const complaint =
+    /\b(not\s+support|does\s+not\s+support|unsupported|invalid|syntax\s+error|sql\s+injection|replace\s+with\s+[?$]|use\s+[?]|\$\d+|@\w+)\b/i;
+
+  return issues.filter((issue) => {
+    const text = `${issue.message || ''} ${issue.suggestion || ''}`;
+    if (namedParamPhrase.test(text)) {
+      return false;
+    }
+    if (nameSet.size === 0) {
+      return true;
+    }
+    const mentionsDeclared = [...nameSet].some((name) =>
+      new RegExp(`:${name}\\b`, 'i').test(text)
+    );
+    if (mentionsDeclared && complaint.test(text)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
  * Review a SQL statement via the configured AI provider.
  * When AI is unavailable, gracefully degrades (passed=true + info issue).
  */
@@ -617,10 +655,17 @@ export async function reviewSQL(input: ReviewSQLInput): Promise<ReviewResult> {
 
   try {
     const dialect = input.dialect || 'mysql';
+    const paramNames = extractNamedParams(input.sql || '');
     const systemPrompt = [
       'You are a senior SQL security and quality reviewer.',
       'Review the given SQL for safety, correctness, and best practices.',
       'Return ONLY JSON matching the schema.',
+      'PLATFORM CONVENTION: named placeholders like :param_name are this platform\'s',
+      'parameter syntax. At invoke time each :name is bound as a prepared-statement',
+      'parameter with a validated value (never string-interpolated).',
+      ':name placeholders are ALWAYS valid for every supported dialect (MySQL and',
+      'PostgreSQL). NEVER report them as syntax errors, unsupported named parameters,',
+      'or SQL injection risks. NEVER suggest replacing them with ? or $1 or @vars.',
       'HARD RULES (always severity=error and passed=false):',
       '- DELETE statements are forbidden.',
       '- DROP statements are forbidden.',
@@ -632,24 +677,30 @@ export async function reviewSQL(input: ReviewSQLInput): Promise<ReviewResult> {
       'Warnings/info alone may still allow passed=true; any severity=error must set passed=false.'
     ].join(' ');
 
+    const declared =
+      paramNames.length > 0 ? paramNames.join(', ') : '(none)';
     const userPrompt = [
       `Dialect: ${dialect}`,
       'Schema context:',
       formatModelsContext(input.models),
+      '',
+      `Declared parameters (server-side bind variables): ${declared}`,
       '',
       'SQL to review:',
       input.sql
     ].join('\n');
 
     const result = await runWithGrammar<ReviewResult>(systemPrompt, userPrompt, REVIEW_SCHEMA);
-    const issues = Array.isArray(result.issues) ? result.issues : [];
+    const rawIssues = Array.isArray(result.issues) ? result.issues : [];
+    const issues = filterNamedParamIssues(rawIssues, paramNames);
     // Empty veto (passed=false with no issues) is model noise; static audit
     // already blocks DROP/DELETE/TRUNCATE. Treat as a clean pass.
-    if (result.passed === false && issues.length === 0) {
+    if (issues.length === 0) {
       return { passed: true, issues: [] };
     }
+    const hasError = issues.some((i) => i.severity === 'error');
     return {
-      passed: Boolean(result.passed),
+      passed: !hasError,
       issues
     };
   } catch (err) {
