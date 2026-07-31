@@ -10,9 +10,12 @@ import { listConnections } from '@/api/connections'
 import { listModels } from '@/api/models'
 import {
   createSql,
-  generateSql,
+  generateSqlStream,
+  GenerateSqlStreamError,
   reviewSql,
   updateSql,
+  type GenerateProgressEvent,
+  type GenerateStepSummary,
   type ReviewResult,
 } from '@/api/sqls'
 import { SqlEditor, type SqlDialect } from '@/components/sql-editor'
@@ -190,8 +193,11 @@ export function SqlsActionDialog({
     explanation?: string
     sql_type?: string
     method?: string
+    selected_tables?: string[]
+    steps?: GenerateStepSummary[]
   } | null>(null)
   const [review, setReview] = useState<ReviewResult | null>(null)
+  const [genProgress, setGenProgress] = useState<GenerateProgressEvent[]>([])
 
   const connectionsQuery = useQuery({
     queryKey: ['connections', { page: 1, size: 100 }],
@@ -242,6 +248,7 @@ export function SqlsActionDialog({
     setSelectedModelIds(new Set())
     setAiMeta(null)
     setReview(null)
+    setGenProgress([])
     if (currentRow) {
       form.reset({
         connection_id: currentRow.connection_id,
@@ -330,14 +337,36 @@ export function SqlsActionDialog({
     mutationFn: () => {
       if (!connectionId) throw new Error('Connection is required.')
       if (!prompt.trim()) throw new Error('Prompt is required.')
-      return generateSql({
-        connection_id: connectionId,
-        prompt: prompt.trim(),
-        model_ids:
-          selectedModelIds.size > 0
-            ? Array.from(selectedModelIds)
-            : undefined,
-      })
+      setGenProgress([])
+      return generateSqlStream(
+        {
+          connection_id: connectionId,
+          prompt: prompt.trim(),
+          model_ids:
+            selectedModelIds.size > 0
+              ? Array.from(selectedModelIds)
+              : undefined,
+        },
+        (event) => {
+          setGenProgress((prev) => [...prev, event])
+          if (
+            event.stage === 'plan' &&
+            event.status === 'done' &&
+            event.tables &&
+            event.tables.length > 0
+          ) {
+            const models = modelsQuery.data?.list ?? []
+            const next = new Set<string>()
+            for (const table of event.tables) {
+              const match = models.find((m) => m.table_name === table)
+              if (match) next.add(match.id)
+            }
+            if (next.size > 0) {
+              setSelectedModelIds(next)
+            }
+          }
+        }
+      )
     },
     onSuccess: (result) => {
       form.setValue('sql', result.sql, { shouldValidate: true })
@@ -352,36 +381,48 @@ export function SqlsActionDialog({
               : String(p.default),
         }))
       )
+      if (result.selected_tables && result.selected_tables.length > 0) {
+        const models = modelsQuery.data?.list ?? []
+        const next = new Set<string>()
+        for (const table of result.selected_tables) {
+          const match = models.find((m) => m.table_name === table)
+          if (match) next.add(match.id)
+        }
+        if (next.size > 0) {
+          setSelectedModelIds(next)
+        }
+      }
       setAiMeta({
         explanation: result.explanation,
         sql_type: result.sql_type,
         method: result.method,
+        selected_tables: result.selected_tables,
+        steps: result.steps,
       })
       setReview(null)
       setSqlTab('write')
       toast.success('SQL generated. Review and save when ready.')
     },
     onError: (err) => {
-      if (err instanceof Error && !(err instanceof AxiosError)) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        toast.error('AI generation was cancelled or timed out.')
+        return
+      }
+      if (err instanceof Error && !(err instanceof GenerateSqlStreamError)) {
         toast.error(err.message)
         return
       }
-      if (err instanceof AxiosError && err.response?.status === 503) {
+      if (err instanceof GenerateSqlStreamError && err.status === 503) {
         toast.error(
-          (err.response?.data as { message?: string })?.message ||
-            'AI service unavailable. Check LLAMA_MODEL_PATH.'
+          err.message || 'AI service unavailable. Check LLAMA_MODEL_PATH.'
         )
         return
       }
-      if (err instanceof AxiosError && err.code === 'ECONNABORTED') {
-        toast.error('AI generation timed out. Please try again.')
+      if (err instanceof GenerateSqlStreamError) {
+        toast.error(err.message || 'Failed to generate SQL.')
         return
       }
-      const message =
-        err instanceof AxiosError
-          ? (err.response?.data as { message?: string })?.message || err.message
-          : 'Failed to generate SQL.'
-      toast.error(message)
+      toast.error('Failed to generate SQL.')
     },
   })
 
@@ -589,6 +630,25 @@ export function SqlsActionDialog({
                               </Badge>
                             )}
                           </div>
+                          {aiMeta.selected_tables &&
+                          aiMeta.selected_tables.length > 0 ? (
+                            <p className='text-xs text-muted-foreground'>
+                              Tables:{' '}
+                              {aiMeta.selected_tables.join(', ')}
+                            </p>
+                          ) : null}
+                          {aiMeta.steps && aiMeta.steps.length > 0 ? (
+                            <ul className='space-y-0.5 text-xs text-muted-foreground'>
+                              {aiMeta.steps.map((step, idx) => (
+                                <li key={`${step.stage}-${idx}`}>
+                                  <span className='font-medium capitalize'>
+                                    {step.stage}
+                                  </span>
+                                  : {step.message}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
                           {aiMeta.explanation ? (
                             <p className='text-muted-foreground'>
                               {aiMeta.explanation}
@@ -664,6 +724,52 @@ export function SqlsActionDialog({
                               ? 'Generating...'
                               : 'Generate'}
                           </Button>
+                          {generateMutation.isPending ||
+                          genProgress.length > 0 ? (
+                            <div className='space-y-1.5 rounded-md border bg-muted/40 p-3 text-sm'>
+                              <p className='text-xs font-medium text-muted-foreground'>
+                                Generation progress
+                              </p>
+                              <ol className='space-y-1'>
+                                {genProgress.map((event, idx) => (
+                                  <li
+                                    key={`${event.stage}-${event.status}-${idx}`}
+                                    className='flex flex-wrap items-center gap-2'
+                                  >
+                                    <Badge
+                                      variant='outline'
+                                      className='capitalize'
+                                    >
+                                      {event.stage}
+                                    </Badge>
+                                    <span
+                                      className={
+                                        event.status === 'done'
+                                          ? 'text-foreground'
+                                          : 'text-muted-foreground'
+                                      }
+                                    >
+                                      {event.message ||
+                                        (event.status === 'start'
+                                          ? 'In progress…'
+                                          : 'Done')}
+                                    </span>
+                                    {event.tables && event.tables.length > 0 ? (
+                                      <span className='text-xs text-muted-foreground'>
+                                        ({event.tables.join(', ')})
+                                      </span>
+                                    ) : null}
+                                  </li>
+                                ))}
+                                {generateMutation.isPending &&
+                                genProgress.length === 0 ? (
+                                  <li className='text-muted-foreground'>
+                                    Starting…
+                                  </li>
+                                ) : null}
+                              </ol>
+                            </div>
+                          ) : null}
                         </>
                       )}
                     </TabsContent>

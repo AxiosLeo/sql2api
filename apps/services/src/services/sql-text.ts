@@ -1,3 +1,109 @@
+import type { SqlParamDef } from '../types';
+
+/**
+ * Extract named placeholders (`:name`) from SQL, preserving first-seen order.
+ * Skips quoted strings and PostgreSQL `::type` casts (same rules as parse rewrite).
+ */
+export function extractNamedParams(sql: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  let i = 0;
+  let inSingle = false;
+  let inDouble = false;
+
+  while (i < sql.length) {
+    const ch = sql[i];
+    const next = sql[i + 1];
+
+    if (inSingle) {
+      if (ch === "'" && next === "'") {
+        i += 2;
+        continue;
+      }
+      if (ch === "'") {
+        inSingle = false;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (inDouble) {
+      if (ch === '"' && next === '"') {
+        i += 2;
+        continue;
+      }
+      if (ch === '"') {
+        inDouble = false;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (ch === "'") {
+      inSingle = true;
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inDouble = true;
+      i += 1;
+      continue;
+    }
+
+    if (ch === ':' && next === ':') {
+      i += 2;
+      continue;
+    }
+
+    if (ch === ':' && next && /[A-Za-z_]/.test(next)) {
+      let j = i + 1;
+      while (j < sql.length && /[A-Za-z0-9_]/.test(sql[j])) {
+        j += 1;
+      }
+      const name = sql.slice(i + 1, j);
+      if (!seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+      i = j;
+      continue;
+    }
+
+    i += 1;
+  }
+
+  return names;
+}
+
+/**
+ * Align AI-emitted params with placeholders actually present in SQL:
+ * keep defs for names that appear, fill missing with required|string, drop extras.
+ */
+export function reconcileSqlParams(
+  sql: string,
+  params?: SqlParamDef[] | null
+): SqlParamDef[] {
+  const names = extractNamedParams(sql);
+  const byName = new Map<string, SqlParamDef>();
+  for (const p of params || []) {
+    if (p && typeof p.name === 'string' && p.name && !byName.has(p.name)) {
+      byName.set(p.name, {
+        name: p.name,
+        rule: p.rule || 'required|string',
+        description: p.description,
+        default: p.default
+      });
+    }
+  }
+  return names.map((name) => {
+    const existing = byName.get(name);
+    if (existing) {
+      return existing;
+    }
+    return { name, rule: 'required|string' };
+  });
+}
+
 /**
  * Split a SQL script into top-level statements by `;`.
  * Skips content inside single/double quotes and `--` / `#` / `/* *\/` comments.

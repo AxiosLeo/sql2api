@@ -909,6 +909,38 @@
           },
           "explanation": {
             "type": "string"
+          },
+          "selected_tables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tables used as schema context after planning"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "stage",
+                "message"
+              ],
+              "properties": {
+                "stage": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "tables": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "description": "Pipeline step summaries for multi-step generation"
           }
         }
       },

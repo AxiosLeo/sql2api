@@ -1,4 +1,5 @@
 import type { KoaContext } from '@axiosleo/koapp';
+import { HttpError, middlewares } from '@axiosleo/koapp';
 import { BaseController } from '../controller';
 import type {
   CreateSqlBody,
@@ -16,8 +17,8 @@ import {
   toSqlItem
 } from './sql.model';
 import type { ColumnDefinition, PaginatedResult, ReviewResult } from '../../types';
-import type { ModelContext } from '../../services/ai';
-import { generateSQL, reviewSQL } from '../../services/ai';
+import type { GenerateProgressEvent, ModelContext } from '../../services/ai';
+import { generateSQLPipeline, reviewSQL } from '../../services/ai';
 import {
   createSql,
   deleteSql,
@@ -29,6 +30,8 @@ import {
   type ModelRecord
 } from '../../services/sqlite';
 import { buildSqlSpec } from '../../services/openapi-spec';
+
+const { KoaSSEMiddleware } = middlewares;
 
 function parseColumns(json: string): ColumnDefinition[] {
   try {
@@ -56,6 +59,40 @@ export class SqlController extends BaseController {
       comment: m.comment || '',
       columns: parseColumns(m.columns_json)
     }));
+  }
+
+  private async runGeneratePipeline(
+    appId: string | null,
+    body: GenerateSqlBody,
+    onProgress?: (event: GenerateProgressEvent) => void | Promise<void>
+  ): Promise<GenerateResult> {
+    const conn = getConnection(appId, body.connection_id);
+    if (!conn) {
+      throw new HttpError(404, 'Not Found Connection');
+    }
+
+    const preselected = Boolean(body.model_ids && body.model_ids.length > 0);
+    const models = this.loadModelContexts(appId, body.connection_id, body.model_ids);
+    const generated = await generateSQLPipeline(
+      {
+        prompt: body.prompt,
+        connection_id: body.connection_id,
+        dialect: conn.type,
+        models,
+        preselected
+      },
+      onProgress
+    );
+
+    return {
+      sql: generated.sql,
+      sql_type: generated.sql_type,
+      method: generated.method,
+      params: generated.params,
+      explanation: generated.explanation,
+      selected_tables: generated.selected_tables,
+      steps: generated.steps
+    };
   }
 
   async create(context: KoaContext) {
@@ -127,27 +164,50 @@ export class SqlController extends BaseController {
   async generate(context: KoaContext) {
     const appId = this.appId(context);
     const body = context.body as GenerateSqlBody;
-
-    const conn = getConnection(appId, body.connection_id);
-    if (!conn) {
-      this.error(404, 'Not Found Connection');
+    try {
+      const result = await this.runGeneratePipeline(appId, body);
+      this.success(result);
+    } catch (err) {
+      if (err instanceof HttpError) {
+        this.error(err.status || 500, err.message);
+      }
+      throw err;
     }
+  }
 
-    const models = this.loadModelContexts(appId, body.connection_id, body.model_ids);
-    const generated = await generateSQL({
-      prompt: body.prompt,
-      connection_id: body.connection_id,
-      dialect: conn!.type,
-      models
-    });
-    const result: GenerateResult = {
-      sql: generated.sql,
-      sql_type: generated.sql_type,
-      method: generated.method,
-      params: generated.params,
-      explanation: generated.explanation
+  /**
+   * SSE streaming generate: progress events then a final `done` or `error`.
+   * Does not use success/failed — SSE owns the response body.
+   */
+  async generateStream(context: KoaContext) {
+    const appId = this.appId(context);
+    const body = context.body as GenerateSqlBody;
+
+    context.koa.set('X-Accel-Buffering', 'no');
+    const sse = KoaSSEMiddleware({ pingInterval: 15000 });
+    await sse(context.koa, async () => {});
+
+    const send = (event: string, data: object) => {
+      if (!context.koa.sse) {
+        return;
+      }
+      context.koa.sse.send({ event, data });
     };
-    this.success(result);
+
+    try {
+      const result = await this.runGeneratePipeline(appId, body, async (event) => {
+        send('progress', event);
+      });
+      send('done', result);
+    } catch (err) {
+      const status = err instanceof HttpError ? (err.status || 500) : 500;
+      const message = err instanceof Error ? err.message : String(err);
+      send('error', { status, message });
+    } finally {
+      if (context.koa.sse) {
+        context.koa.sse.close();
+      }
+    }
   }
 
   async review(context: KoaContext) {

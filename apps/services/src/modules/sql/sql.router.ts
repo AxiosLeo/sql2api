@@ -19,6 +19,10 @@ router.post('/generate', (ctx) => controller.generate(ctx), {
   body: { rules: generateSqlRules }
 });
 
+router.post('/generate/stream', (ctx) => controller.generateStream(ctx), {
+  body: { rules: generateSqlRules }
+});
+
 router.post('/review', (ctx) => controller.review(ctx), {
   body: { rules: reviewSqlRules }
 });

@@ -62,6 +62,12 @@ export interface GenerateResult {
   method: string;
   params: SqlParamDef[];
   explanation: string;
+  selected_tables?: string[];
+  steps?: Array<{
+    stage: string;
+    message: string;
+    tables?: string[];
+  }>;
 }
 
 export interface ReviewSqlBody {
