@@ -194,12 +194,6 @@ export function ConnectionsActionDialog({
   const sameAppAsSource =
     !!currentRow && watchedAppId === currentRow.app_id
 
-  useEffect(() => {
-    if (isDuplicate && !sameAppAsSource && reusePassword) {
-      setReusePassword(false)
-    }
-  }, [isDuplicate, sameAppAsSource, reusePassword])
-
   const canUseSourcePassword =
     !!currentRow &&
     (isEdit || (isDuplicate && reusePassword && sameAppAsSource))
