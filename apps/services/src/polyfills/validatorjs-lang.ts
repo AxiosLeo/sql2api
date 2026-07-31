@@ -5,10 +5,10 @@
  *
  * Register English messages eagerly (static import) before any Validator use.
  */
-import Validator from 'validatorjs';
+import Validator, { type ErrorMessages } from 'validatorjs';
 // Package ships messages as plain CJS; no dedicated type declarations.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const en = require('validatorjs/src/lang/en') as Record<string, unknown>;
+const en = require('validatorjs/src/lang/en') as ErrorMessages;
 
 Validator.setMessages('en', en);
 Validator.useLang('en');
