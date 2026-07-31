@@ -62,12 +62,19 @@ export interface GenerateResult {
   method: string;
   params: SqlParamDef[];
   explanation: string;
+  suggested_name?: string;
   selected_tables?: string[];
   steps?: Array<{
     stage: string;
     message: string;
     tables?: string[];
   }>;
+}
+
+export interface GenerateNameBody {
+  prompt?: string;
+  sql?: string;
+  params?: string[];
 }
 
 export interface ReviewSqlBody {
@@ -111,6 +118,13 @@ export const generateSqlRules = {
   prompt: 'required|string',
   model_ids: 'array',
   'model_ids.*': 'string'
+};
+
+export const generateNameRules = {
+  prompt: 'string',
+  sql: 'string',
+  params: 'array',
+  'params.*': 'string'
 };
 
 export const reviewSqlRules = {

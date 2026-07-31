@@ -11,7 +11,7 @@ import type {
 } from '../types';
 import { SQL_TYPE_TO_METHOD } from '../types';
 import { analyzeSql, staticAuditSql } from '../modules/sql/sql.model';
-import { reconcileSqlParams } from './sql-text';
+import { reconcileSqlParams, slugifyApiName } from './sql-text';
 
 export interface AIGenerateResult {
   sql: string;
@@ -19,6 +19,7 @@ export interface AIGenerateResult {
   method: string;
   params: SqlParamDef[];
   explanation: string;
+  suggested_name: string;
 }
 
 export type PipelineStage = 'plan' | 'generate' | 'params' | 'repair';
@@ -127,9 +128,18 @@ const GENERATE_SCHEMA = {
         required: ['name', 'rule']
       }
     },
-    explanation: { type: 'string' }
+    explanation: { type: 'string' },
+    name: { type: 'string' }
   },
-  required: ['sql', 'sql_type', 'params', 'explanation']
+  required: ['sql', 'sql_type', 'params', 'explanation', 'name']
+} as const;
+
+const NAME_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' }
+  },
+  required: ['name']
 } as const;
 
 const PLAN_SCHEMA = {
@@ -299,6 +309,7 @@ function toGenerateResult(result: {
   sql_type: string;
   params: SqlParamDef[];
   explanation: string;
+  name?: string;
 }): AIGenerateResult {
   const sqlType = normalizeSqlType(result.sql_type);
   return {
@@ -306,7 +317,8 @@ function toGenerateResult(result: {
     sql_type: sqlType,
     method: SQL_TYPE_TO_METHOD[sqlType],
     params: Array.isArray(result.params) ? result.params : [],
-    explanation: result.explanation || ''
+    explanation: result.explanation || '',
+    suggested_name: slugifyApiName(result.name || '')
   };
 }
 
@@ -377,6 +389,7 @@ function buildGenerateSystemPrompt(dialect: DatasourceType): string {
     'Prefer the most specific matching table from schema context (e.g. a statistics table over raw detail tables when the request asks for 统计/summary).',
     'NEVER generate DELETE, DROP, or TRUNCATE statements.',
     'Prefer SELECT / INSERT / UPDATE. For multi-step logic use sql_type=complex.',
+    'Also provide name: a short kebab-case API name in lowercase english words joined by hyphens (e.g. get-user-by-id).',
     'Return ONLY JSON matching the schema.'
   ].join(' ');
 }
@@ -465,6 +478,7 @@ export async function generateSQL(input: GenerateSQLInput): Promise<AIGenerateRe
       sql_type: SqlType;
       params: SqlParamDef[];
       explanation: string;
+      name?: string;
     }>(buildGenerateSystemPrompt(dialect), userPrompt, GENERATE_SCHEMA);
 
     return toGenerateResult(result);
@@ -509,9 +523,71 @@ async function repairSQL(input: {
     sql_type: SqlType;
     params: SqlParamDef[];
     explanation: string;
+    name?: string;
   }>(systemPrompt, userPrompt, GENERATE_SCHEMA);
 
   return toGenerateResult(result);
+}
+
+/**
+ * Suggest a kebab-case API name from prompt / SQL / param names.
+ */
+export async function generateApiName(input: {
+  prompt?: string;
+  sql?: string;
+  params?: string[];
+}): Promise<string> {
+  const modelPath = resolveModelPath();
+  if (!modelPath) {
+    throw new HttpError(503, 'AI Service Unavailable: LLAMA_MODEL_PATH not configured');
+  }
+
+  const prompt = (input.prompt || '').trim();
+  const sql = (input.sql || '').trim();
+  const params = (input.params || []).filter((p) => typeof p === 'string' && p.trim());
+
+  if (!prompt && !sql) {
+    throw new HttpError(400, 'Either prompt or sql is required');
+  }
+
+  try {
+    const systemPrompt = [
+      'You name HTTP API endpoints.',
+      'Return a short kebab-case name: lowercase english words joined by hyphens (e.g. get-user-by-id).',
+      'Prefer verb + resource style based on the SQL intent (get/list/create/update-...).',
+      'Do not include spaces, underscores, or punctuation other than hyphens.',
+      'Keep it under 64 characters. Return ONLY JSON matching the schema.'
+    ].join(' ');
+
+    const parts: string[] = [];
+    if (prompt) {
+      parts.push('User request / prompt:', prompt, '');
+    }
+    if (sql) {
+      parts.push('SQL:', sql, '');
+    }
+    if (params.length > 0) {
+      parts.push('Parameter names:', params.join(', '));
+    }
+
+    const raw = await runWithGrammar<{ name: string }>(
+      systemPrompt,
+      parts.join('\n'),
+      NAME_SCHEMA,
+      { maxTokens: 64 }
+    );
+    const name = slugifyApiName(raw.name || '');
+    if (!name) {
+      throw new HttpError(422, 'AI did not produce a usable name');
+    }
+    return name;
+  } catch (err) {
+    if (err instanceof HttpError) {
+      throw err;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    throw new HttpError(503, `AI Service Unavailable: ${message}`);
+  }
 }
 
 /**
@@ -667,6 +743,7 @@ export async function generateSQLPipeline(
     }
 
     if (needsRepair) {
+      const previousSuggestedName = generated.suggested_name;
       await emit({
         stage: 'repair',
         status: 'start',
@@ -684,6 +761,12 @@ export async function generateSQLPipeline(
         sql: generated.sql,
         issues: issueMessages
       });
+      if (!generated.suggested_name && previousSuggestedName) {
+        generated = {
+          ...generated,
+          suggested_name: previousSuggestedName
+        };
+      }
       generated = {
         ...generated,
         params: reconcileSqlParams(generated.sql, generated.params)

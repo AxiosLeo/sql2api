@@ -2,6 +2,7 @@ import { Router } from '@axiosleo/koapp';
 import controller from './sql.controller';
 import {
   createSqlRules,
+  generateNameRules,
   generateSqlRules,
   reviewSqlRules,
   sqlIdRules,
@@ -21,6 +22,10 @@ router.post('/generate', (ctx) => controller.generate(ctx), {
 
 router.post('/generate/stream', (ctx) => controller.generateStream(ctx), {
   body: { rules: generateSqlRules }
+});
+
+router.post('/generate-name', (ctx) => controller.generateName(ctx), {
+  body: { rules: generateNameRules }
 });
 
 router.post('/review', (ctx) => controller.review(ctx), {

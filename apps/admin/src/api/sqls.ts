@@ -93,6 +93,7 @@ export interface GenerateSqlResult {
   method: string
   params: SqlParamDef[]
   explanation: string
+  suggested_name?: string
   selected_tables?: string[]
   steps?: GenerateStepSummary[]
 }
@@ -151,6 +152,23 @@ export function generateSql(
   return apiRequest<GenerateSqlResult>({
     method: 'POST',
     url: '/api/sqls/generate',
+    data: body,
+    timeout: 120_000,
+  })
+}
+
+export interface GenerateNameBody {
+  prompt?: string
+  sql?: string
+  params?: string[]
+}
+
+export function generateSqlName(
+  body: GenerateNameBody
+): Promise<{ name: string }> {
+  return apiRequest<{ name: string }>({
+    method: 'POST',
+    url: '/api/sqls/generate-name',
     data: body,
     timeout: 120_000,
   })

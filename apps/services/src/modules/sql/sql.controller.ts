@@ -3,6 +3,7 @@ import { HttpError, middlewares } from '@axiosleo/koapp';
 import { BaseController } from '../controller';
 import type {
   CreateSqlBody,
+  GenerateNameBody,
   GenerateResult,
   GenerateSqlBody,
   ReviewSqlBody,
@@ -18,7 +19,7 @@ import {
 } from './sql.model';
 import type { ColumnDefinition, PaginatedResult, ReviewResult } from '../../types';
 import type { GenerateProgressEvent, ModelContext } from '../../services/ai';
-import { generateSQLPipeline, reviewSQL } from '../../services/ai';
+import { generateApiName, generateSQLPipeline, reviewSQL } from '../../services/ai';
 import {
   createSql,
   deleteSql,
@@ -90,6 +91,7 @@ export class SqlController extends BaseController {
       method: generated.method,
       params: generated.params,
       explanation: generated.explanation,
+      suggested_name: generated.suggested_name || undefined,
       selected_tables: generated.selected_tables,
       steps: generated.steps
     };
@@ -167,6 +169,29 @@ export class SqlController extends BaseController {
     try {
       const result = await this.runGeneratePipeline(appId, body);
       this.success(result);
+    } catch (err) {
+      if (err instanceof HttpError) {
+        this.error(err.status || 500, err.message);
+      }
+      throw err;
+    }
+  }
+
+  async generateName(context: KoaContext) {
+    const body = (context.body || {}) as GenerateNameBody;
+    const prompt = (body.prompt || '').trim();
+    const sql = (body.sql || '').trim();
+    if (!prompt && !sql) {
+      this.error(400, 'Either prompt or sql is required');
+    }
+
+    try {
+      const name = await generateApiName({
+        prompt: prompt || undefined,
+        sql: sql || undefined,
+        params: body.params
+      });
+      this.success({ name });
     } catch (err) {
       if (err instanceof HttpError) {
         this.error(err.status || 500, err.message);

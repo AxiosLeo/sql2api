@@ -10,6 +10,7 @@ import { listConnections } from '@/api/connections'
 import { listModels } from '@/api/models'
 import {
   createSql,
+  generateSqlName,
   generateSqlStream,
   GenerateSqlStreamError,
   reviewSql,
@@ -369,6 +370,10 @@ export function SqlsActionDialog({
       )
     },
     onSuccess: (result) => {
+      const currentName = form.getValues('name')?.trim() || ''
+      if (!currentName && result.suggested_name) {
+        form.setValue('name', result.suggested_name, { shouldValidate: true })
+      }
       form.setValue('sql', result.sql, { shouldValidate: true })
       replace(
         (result.params || []).map((p) => ({
@@ -423,6 +428,55 @@ export function SqlsActionDialog({
         return
       }
       toast.error('Failed to generate SQL.')
+    },
+  })
+
+  const nameGenMutation = useMutation({
+    mutationFn: () => {
+      const sql = sqlValue.trim()
+      const promptText = prompt.trim()
+      if (!sql && !promptText) {
+        throw new Error('Provide SQL or a prompt first.')
+      }
+      const paramNames = (form.getValues('params') || [])
+        .map((p) => p.name?.trim())
+        .filter((n): n is string => Boolean(n))
+      return generateSqlName({
+        prompt: promptText || undefined,
+        sql: sql || undefined,
+        params: paramNames.length > 0 ? paramNames : undefined,
+      })
+    },
+    onSuccess: (result) => {
+      if (result.name) {
+        form.setValue('name', result.name, { shouldValidate: true })
+        toast.success('Name suggested.')
+      }
+    },
+    onError: (err) => {
+      if (err instanceof Error && !(err instanceof AxiosError)) {
+        toast.error(err.message)
+        return
+      }
+      if (err instanceof AxiosError && err.response?.status === 503) {
+        toast.error(
+          (err.response?.data as { message?: string })?.message ||
+            'AI service unavailable. Check LLAMA_MODEL_PATH.'
+        )
+        return
+      }
+      if (err instanceof AxiosError && err.response?.status === 422) {
+        toast.error(
+          (err.response?.data as { message?: string })?.message ||
+            'AI did not produce a usable name.'
+        )
+        return
+      }
+      const message =
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string })?.message || err.message
+          : 'Failed to generate name.'
+      toast.error(message)
     },
   })
 
@@ -534,7 +588,23 @@ export function SqlsActionDialog({
                     name='name'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Name</FormLabel>
+                        <div className='flex items-center justify-between gap-2'>
+                          <FormLabel>Name</FormLabel>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            className='h-7 px-2 text-xs'
+                            disabled={
+                              nameGenMutation.isPending ||
+                              (!sqlValue.trim() && !prompt.trim())
+                            }
+                            onClick={() => nameGenMutation.mutate()}
+                          >
+                            <Sparkles className='me-1 h-3.5 w-3.5' />
+                            {nameGenMutation.isPending ? 'Naming...' : 'AI'}
+                          </Button>
+                        </div>
                         <FormControl>
                           <Input
                             placeholder='get-user-by-id'

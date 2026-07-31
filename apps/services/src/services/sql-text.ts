@@ -75,6 +75,27 @@ export function extractNamedParams(sql: string): string[] {
   return names;
 }
 
+const API_NAME_MAX_LEN = 64;
+
+/**
+ * Normalize a free-form string into a kebab-case API name (lowercase a-z0-9 + hyphens).
+ * Returns '' when nothing usable remains (e.g. pure CJK input).
+ */
+export function slugifyApiName(raw: string): string {
+  if (!raw || typeof raw !== 'string') {
+    return '';
+  }
+  let slug = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (slug.length > API_NAME_MAX_LEN) {
+    slug = slug.slice(0, API_NAME_MAX_LEN).replace(/-+$/g, '');
+  }
+  return slug;
+}
+
 /**
  * Align AI-emitted params with placeholders actually present in SQL:
  * keep defs for names that appear, fill missing with required|string, drop extras.

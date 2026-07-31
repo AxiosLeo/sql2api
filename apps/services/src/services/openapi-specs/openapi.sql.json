@@ -253,6 +253,62 @@
         }
       }
     },
+    "/openapi/sqls/generate-name": {
+      "post": {
+        "tags": [
+          "Sqls"
+        ],
+        "summary": "AI 生成 API 名称",
+        "description": "根据 Prompt、SQL 与参数名生成 kebab-case 接口名，不落库。",
+        "operationId": "generateSqlName",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateNameBody"
+              },
+              "example": {
+                "prompt": "查询某年某月的用水量",
+                "sql": "SELECT * FROM water_statistics WHERE data_month = :data_month",
+                "params": [
+                  "data_month"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "生成成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateNameResultResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
     "/openapi/sqls/review": {
       "post": {
         "tags": [
@@ -550,6 +606,16 @@
       },
       "Conflict": {
         "description": "同名 SQL 已存在",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "业务校验失败（如 AI 未产出可用名称）",
         "content": {
           "application/json": {
             "schema": {
@@ -910,6 +976,10 @@
           "explanation": {
             "type": "string"
           },
+          "suggested_name": {
+            "type": "string",
+            "description": "Suggested kebab-case API name"
+          },
           "selected_tables": {
             "type": "array",
             "items": {
@@ -941,6 +1011,36 @@
               }
             },
             "description": "Pipeline step summaries for multi-step generation"
+          }
+        }
+      },
+      "GenerateNameBody": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "sql": {
+            "type": "string"
+          },
+          "params": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "GenerateNameResult": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Kebab-case API name"
           }
         }
       },
@@ -1032,6 +1132,21 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/GenerateResult"
+              }
+            }
+          }
+        ]
+      },
+      "GenerateNameResultResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/GenerateNameResult"
               }
             }
           }

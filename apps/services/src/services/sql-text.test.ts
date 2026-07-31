@@ -2,8 +2,36 @@ import assert from 'assert';
 import {
   extractNamedParams,
   reconcileSqlParams,
+  slugifyApiName,
   splitSqlStatements
 } from './sql-text';
+
+describe('slugifyApiName', () => {
+  it('lowercases and joins with hyphens', () => {
+    assert.strictEqual(slugifyApiName('Get User By Id'), 'get-user-by-id');
+  });
+
+  it('collapses underscores and special chars', () => {
+    assert.strictEqual(slugifyApiName('get_user__by!!id'), 'get-user-by-id');
+  });
+
+  it('strips leading/trailing hyphens', () => {
+    assert.strictEqual(slugifyApiName('--hello-world--'), 'hello-world');
+  });
+
+  it('returns empty for pure CJK / invalid input', () => {
+    assert.strictEqual(slugifyApiName('查询用水量'), '');
+    assert.strictEqual(slugifyApiName('!!!'), '');
+    assert.strictEqual(slugifyApiName(''), '');
+  });
+
+  it('truncates to 64 chars without trailing hyphen', () => {
+    const long = `a-${'b'.repeat(80)}`;
+    const result = slugifyApiName(long);
+    assert.ok(result.length <= 64);
+    assert.ok(!result.endsWith('-'));
+  });
+});
 
 describe('extractNamedParams', () => {
   it('extracts :name placeholders in order', () => {
