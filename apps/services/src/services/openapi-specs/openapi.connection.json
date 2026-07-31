@@ -608,7 +608,6 @@
           "host",
           "port",
           "username",
-          "password",
           "database"
         ],
         "properties": {
@@ -634,7 +633,12 @@
           "password": {
             "type": "string",
             "format": "password",
-            "description": "明文密码，服务端 AES-256-GCM 加密存储，响应中永不回传"
+            "description": "明文密码（与 copy_password_from 至少提供其一），服务端 AES-256-GCM 加密存储，响应中永不回传"
+          },
+          "copy_password_from": {
+            "type": "string",
+            "format": "uuid",
+            "description": "省略 password 时，从同应用下该连接解密并复用密码"
           },
           "database": {
             "type": "string",

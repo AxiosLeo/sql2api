@@ -37,6 +37,19 @@ export class ConnectionController extends BaseController {
       this.error(401, 'Unauthorized');
     }
 
+    const password = (body.password || '').trim();
+    let resolvedPassword = password;
+    if (!resolvedPassword) {
+      if (!body.copy_password_from) {
+        this.error(400, 'password is required when copy_password_from is omitted');
+      }
+      const stored = getConnectionConfig(appId, body.copy_password_from!);
+      if (!stored) {
+        this.error(404, 'Source connection not found');
+      }
+      resolvedPassword = stored!.password;
+    }
+
     try {
       const record = createConnection({
         app_id: appId!,
@@ -45,7 +58,7 @@ export class ConnectionController extends BaseController {
         host: body.host,
         port: Number(body.port),
         username: body.username,
-        password: body.password,
+        password: resolvedPassword,
         database: body.database
       });
       this.success(toConnectionItem(record));

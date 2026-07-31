@@ -22,10 +22,13 @@ export interface CreateConnectionBody {
   host: string;
   port: number;
   username: string;
-  password: string;
+  /** Required unless copy_password_from is provided. */
+  password?: string;
   database: string;
   /** Required when creating via admin session (no Bearer app scope). */
   app_id?: string;
+  /** When password is omitted, decrypt and reuse this connection's password. */
+  copy_password_from?: string;
 }
 
 export interface UpdateConnectionBody {
@@ -73,9 +76,10 @@ export const createConnectionRules = {
   host: 'required|string',
   port: 'required|integer|min:1|max:65535',
   username: 'required|string',
-  password: 'required|string',
+  password: 'string',
   database: 'required|string',
-  app_id: 'string'
+  app_id: 'string',
+  copy_password_from: 'string'
 };
 
 export const updateConnectionRules = {

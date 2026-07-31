@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import useDialogState from '@/hooks/use-dialog-state'
 import { type Connection } from '../data/schema'
 
-type ConnectionsDialogType = 'create' | 'edit' | 'delete'
+type ConnectionsDialogType = 'create' | 'edit' | 'duplicate' | 'delete'
 
 type ConnectionsContextType = {
   open: ConnectionsDialogType | null

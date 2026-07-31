@@ -15,6 +15,7 @@ import {
   type TestConnectionResult,
 } from '@/api/connections'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/password-input'
 import { SelectDropdown } from '@/components/select-dropdown'
 import {
@@ -65,8 +67,11 @@ const formSchema = z.object({
 
 type ConnectionForm = z.infer<typeof formSchema>
 
+type DialogMode = 'create' | 'edit' | 'duplicate'
+
 type ConnectionsActionDialogProps = {
   currentRow?: Connection
+  mode?: DialogMode
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -77,15 +82,36 @@ function isTestResult(
   return 'ok' in data
 }
 
+function resolveMode(
+  mode: DialogMode | undefined,
+  currentRow?: Connection
+): DialogMode {
+  if (mode) return mode
+  return currentRow ? 'edit' : 'create'
+}
+
+function duplicateName(sourceName: string): string {
+  const suffix = '-copy'
+  const max = 64
+  if (sourceName.length + suffix.length <= max) {
+    return `${sourceName}${suffix}`
+  }
+  return `${sourceName.slice(0, max - suffix.length)}${suffix}`
+}
+
 export function ConnectionsActionDialog({
   currentRow,
+  mode: modeProp,
   open,
   onOpenChange,
 }: ConnectionsActionDialogProps) {
-  const isEdit = !!currentRow
+  const mode = resolveMode(modeProp, currentRow)
+  const isEdit = mode === 'edit'
+  const isDuplicate = mode === 'duplicate'
   const queryClient = useQueryClient()
   const [probeOk, setProbeOk] = useState(false)
   const [databases, setDatabases] = useState<string[]>([])
+  const [reusePassword, setReusePassword] = useState(true)
 
   const appsQuery = useQuery({
     queryKey: ['apps', { page: 1, size: 100 }],
@@ -113,7 +139,20 @@ export function ConnectionsActionDialog({
     if (!open) return
     setProbeOk(false)
     setDatabases([])
-    if (currentRow) {
+    setReusePassword(true)
+    if (isDuplicate && currentRow) {
+      form.reset({
+        app_id: currentRow.app_id,
+        name: duplicateName(currentRow.name),
+        type: currentRow.type,
+        host: currentRow.host,
+        port: currentRow.port,
+        username: currentRow.username,
+        password: '',
+        database: currentRow.database,
+        status: 'active',
+      })
+    } else if (isEdit && currentRow) {
       form.reset({
         app_id: currentRow.app_id,
         name: currentRow.name,
@@ -138,18 +177,32 @@ export function ConnectionsActionDialog({
         status: 'active',
       })
     }
-  }, [open, currentRow, form])
+  }, [open, currentRow, form, isDuplicate, isEdit])
 
   const watchedType = form.watch('type')
   const watchedHost = form.watch('host')
   const watchedPort = form.watch('port')
   const watchedUsername = form.watch('username')
   const watchedPassword = form.watch('password')
+  const watchedAppId = form.watch('app_id')
 
   useEffect(() => {
     setProbeOk(false)
     setDatabases([])
   }, [watchedType, watchedHost, watchedPort, watchedUsername, watchedPassword])
+
+  const sameAppAsSource =
+    !!currentRow && watchedAppId === currentRow.app_id
+
+  useEffect(() => {
+    if (isDuplicate && !sameAppAsSource && reusePassword) {
+      setReusePassword(false)
+    }
+  }, [isDuplicate, sameAppAsSource, reusePassword])
+
+  const canUseSourcePassword =
+    !!currentRow &&
+    (isEdit || (isDuplicate && reusePassword && sameAppAsSource))
 
   const buildProbeBody = (
     values: ConnectionForm,
@@ -164,7 +217,7 @@ export function ConnectionsActionDialog({
       password,
       database: values.database || undefined,
       connection_id:
-        !password && isEdit && currentRow ? currentRow.id : undefined,
+        !password && canUseSourcePassword ? currentRow!.id : undefined,
       action,
     }
   }
@@ -172,7 +225,8 @@ export function ConnectionsActionDialog({
   const probeMutation = useMutation({
     mutationFn: async (action: 'test' | 'databases') => {
       const values = form.getValues()
-      if (!isEdit && !values.password?.trim()) {
+      const password = values.password?.trim()
+      if (!password && !canUseSourcePassword) {
         throw new Error('Password is required.')
       }
       if (
@@ -245,6 +299,23 @@ export function ConnectionsActionDialog({
           status: values.status,
         })
       }
+      if (
+        isDuplicate &&
+        reusePassword &&
+        currentRow &&
+        values.app_id === currentRow.app_id
+      ) {
+        return createConnection({
+          app_id: values.app_id,
+          name: values.name,
+          type: values.type,
+          host: values.host,
+          port: values.port,
+          username: values.username,
+          database: values.database,
+          copy_password_from: currentRow.id,
+        })
+      }
       if (!values.password?.trim()) {
         throw new Error('Password is required.')
       }
@@ -261,7 +332,13 @@ export function ConnectionsActionDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] })
-      toast.success(isEdit ? 'Connection updated.' : 'Connection created.')
+      toast.success(
+        isEdit
+          ? 'Connection updated.'
+          : isDuplicate
+            ? 'Connection duplicated.'
+            : 'Connection created.'
+      )
       onOpenChange(false)
     },
     onError: (err) => {
@@ -282,7 +359,12 @@ export function ConnectionsActionDialog({
   })
 
   const onSubmit = (values: ConnectionForm) => {
-    if (!isEdit && !values.password?.trim()) {
+    const reusing =
+      isDuplicate &&
+      reusePassword &&
+      !!currentRow &&
+      values.app_id === currentRow.app_id
+    if (!isEdit && !reusing && !values.password?.trim()) {
       form.setError('password', { message: 'Password is required.' })
       return
     }
@@ -315,6 +397,22 @@ export function ConnectionsActionDialog({
 
   const databaseListId = 'connection-database-options'
 
+  const title =
+    isEdit
+      ? 'Edit Connection'
+      : isDuplicate
+        ? 'Duplicate Connection'
+        : 'Add Connection'
+
+  const description = isEdit
+    ? 'Update connection details. Leave password blank to keep the current password. Use Test Connection to verify without saving.'
+    : isDuplicate
+      ? 'Create a new connection from this one. Change name or database as needed. Reuse the source password or enter a new one.'
+      : 'Create a new database connection. Test connectivity before saving — testing never creates a record.'
+
+  const passwordOptional = isEdit || canUseSourcePassword
+  const passwordDisabled = isDuplicate && canUseSourcePassword
+
   return (
     <Dialog
       open={open}
@@ -323,20 +421,15 @@ export function ConnectionsActionDialog({
           form.reset()
           setProbeOk(false)
           setDatabases([])
+          setReusePassword(true)
         }
         onOpenChange(state)
       }}
     >
       <DialogContent className='flex max-h-[90vh] w-full flex-col sm:max-w-3xl'>
         <DialogHeader className='text-start'>
-          <DialogTitle>
-            {isEdit ? 'Edit Connection' : 'Add Connection'}
-          </DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? 'Update connection details. Leave password blank to keep the current password. Use Test Connection to verify without saving.'
-              : 'Create a new database connection. Test connectivity before saving — testing never creates a record.'}
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form
@@ -451,11 +544,18 @@ export function ConnectionsActionDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Password{isEdit ? ' (optional)' : ''}
+                      Password{passwordOptional ? ' (optional)' : ''}
                     </FormLabel>
                     <FormControl>
                       <PasswordInput
-                        placeholder={isEdit ? 'Leave blank to keep' : '********'}
+                        placeholder={
+                          passwordDisabled
+                            ? 'Using source password'
+                            : isEdit
+                              ? 'Leave blank to keep'
+                              : '********'
+                        }
+                        disabled={passwordDisabled}
                         {...field}
                       />
                     </FormControl>
@@ -464,6 +564,36 @@ export function ConnectionsActionDialog({
                 )}
               />
             </div>
+            {isDuplicate && (
+              <div className='flex flex-col gap-1'>
+                <div className='flex items-center gap-2'>
+                  <Checkbox
+                    id='reuse-source-password'
+                    checked={reusePassword && sameAppAsSource}
+                    disabled={!sameAppAsSource}
+                    onCheckedChange={(v) => {
+                      const checked = v === true
+                      setReusePassword(checked)
+                      if (checked) {
+                        form.setValue('password', '')
+                        form.clearErrors('password')
+                      }
+                    }}
+                  />
+                  <Label
+                    htmlFor='reuse-source-password'
+                    className='cursor-pointer font-normal'
+                  >
+                    Use password from source connection
+                  </Label>
+                </div>
+                {!sameAppAsSource && (
+                  <p className='text-muted-foreground text-xs'>
+                    Source password can only be reused within the same app.
+                  </p>
+                )}
+              </div>
+            )}
             <FormField
               control={form.control}
               name='database'

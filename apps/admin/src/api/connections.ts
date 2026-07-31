@@ -39,8 +39,11 @@ export interface CreateConnectionBody {
   host: string
   port: number
   username: string
-  password: string
+  /** Required unless copy_password_from is provided. */
+  password?: string
   database: string
+  /** Reuse decrypted password from this connection (same app). */
+  copy_password_from?: string
 }
 
 export interface UpdateConnectionBody {

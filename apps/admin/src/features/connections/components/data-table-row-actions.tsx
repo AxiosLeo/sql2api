@@ -2,7 +2,7 @@ import { DotsHorizontalIcon } from '@radix-ui/react-icons'
 import { type Row } from '@tanstack/react-table'
 import { useMutation } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
-import { Cable, Pencil, Trash2 } from 'lucide-react'
+import { Cable, Copy, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { testConnection } from '@/api/connections'
 import { Button } from '@/components/ui/button'
@@ -67,6 +67,17 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           Edit
           <DropdownMenuShortcut>
             <Pencil size={16} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            setCurrentRow(row.original)
+            setOpen('duplicate')
+          }}
+        >
+          Duplicate
+          <DropdownMenuShortcut>
+            <Copy size={16} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem

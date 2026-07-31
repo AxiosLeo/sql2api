@@ -112,6 +112,39 @@ describe('sqlite service', function () {
     assert.strictEqual(getConnection(app.id, conn.id), null);
   });
 
+  it('can create a connection using password from another connection', () => {
+    const app = createApp('copy-pw-app');
+    const source = createConnection({
+      app_id: app.id,
+      name: 'source-mysql',
+      type: 'mysql',
+      host: '127.0.0.1',
+      port: 3306,
+      username: 'root',
+      password: 'reuse-me',
+      database: 'demo'
+    });
+
+    const stored = getConnectionConfig(app.id, source.id);
+    assert.ok(stored);
+
+    const copy = createConnection({
+      app_id: app.id,
+      name: 'source-mysql-copy',
+      type: 'mysql',
+      host: '127.0.0.1',
+      port: 3306,
+      username: 'root',
+      password: stored!.password,
+      database: 'demo2'
+    });
+
+    const copyCfg = getConnectionConfig(app.id, copy.id);
+    assert.ok(copyCfg);
+    assert.strictEqual(copyCfg!.password, 'reuse-me');
+    assert.notStrictEqual(copy.password_enc, source.password_enc);
+  });
+
   it('upserts models and manages sqls', () => {
     const app = createApp('sql-app');
     const conn = createConnection({

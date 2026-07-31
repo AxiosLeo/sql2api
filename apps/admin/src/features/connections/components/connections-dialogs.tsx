@@ -23,6 +23,18 @@ export function ConnectionsDialogs() {
               setTimeout(() => setCurrentRow(null), 500)
             }}
             currentRow={currentRow}
+            mode='edit'
+          />
+
+          <ConnectionsActionDialog
+            key={`connection-duplicate-${currentRow.id}`}
+            open={open === 'duplicate'}
+            onOpenChange={() => {
+              setOpen('duplicate')
+              setTimeout(() => setCurrentRow(null), 500)
+            }}
+            currentRow={currentRow}
+            mode='duplicate'
           />
 
           <ConnectionsDeleteDialog
