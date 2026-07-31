@@ -6,7 +6,7 @@ export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 export type EntityStatus = 'active' | 'disabled';
 
-export type SqlStatus = 'enabled' | 'disabled';
+export type SqlStatus = 'enabled' | 'disabled' | 'draft';
 
 export interface PaginationQuery {
   page?: number;

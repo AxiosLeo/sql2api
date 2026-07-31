@@ -18,6 +18,10 @@ const statusClass = new Map<string, string>([
     'disabled',
     'bg-neutral-300/40 border-neutral-400 text-muted-foreground',
   ],
+  [
+    'draft',
+    'bg-amber-100/50 text-amber-900 dark:text-amber-200 border-amber-300',
+  ],
 ])
 
 const typeClass = new Map<string, string>([

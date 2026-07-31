@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const aiProviderRaw = (process.env.AI_PROVIDER || 'local').toLowerCase();
+const aiProvider = aiProviderRaw === 'ollama' ? 'ollama' : 'local';
+
 export default {
   envs: {
     deploy: process.env.DEPLOY_ENV || 'local',
@@ -23,7 +26,15 @@ export default {
         : 30
     },
     ai: {
-      model_path: process.env.LLAMA_MODEL_PATH || ''
+      provider: aiProvider as 'local' | 'ollama',
+      model_path: process.env.LLAMA_MODEL_PATH || '',
+      ollama: {
+        base_url: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
+        model: process.env.OLLAMA_MODEL || 'gpt-oss:20b',
+        timeout_ms: process.env.OLLAMA_TIMEOUT_MS
+          ? parseInt(process.env.OLLAMA_TIMEOUT_MS, 10)
+          : 120000
+      }
     },
     mysql: {
       host: process.env.MYSQL_HOST || 'localhost',

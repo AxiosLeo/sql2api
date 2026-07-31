@@ -4,6 +4,8 @@ import { splitSqlStatements } from '../../services/sql-text';
 import {
   analyzeSql,
   detectSqlType,
+  extractTableNames,
+  mergeReviewResults,
   replaceNamedParamsForParse,
   staticAuditSql
 } from './sql.model';
@@ -209,5 +211,77 @@ describe('sql.model staticAuditSql', () => {
     );
     assert.strictEqual(analysis.sql_type, 'complex');
     assert.strictEqual(staticAuditSql(analysis).length, 0);
+  });
+});
+
+describe('sql.model extractTableNames', () => {
+  it('extracts FROM table', () => {
+    const tables = extractTableNames(
+      'SELECT * FROM water_statistics WHERE year = :year',
+      'mysql'
+    );
+    assert.ok(tables.includes('water_statistics'));
+  });
+
+  it('extracts JOIN tables', () => {
+    const tables = extractTableNames(
+      'SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id = :id',
+      'mysql'
+    );
+    assert.ok(tables.includes('users'));
+    assert.ok(tables.includes('orders'));
+  });
+
+  it('extracts INSERT INTO table', () => {
+    const tables = extractTableNames(
+      'INSERT INTO users (name) VALUES (:name)',
+      'mysql'
+    );
+    assert.ok(tables.includes('users'));
+  });
+
+  it('extracts UPDATE table', () => {
+    const tables = extractTableNames(
+      'UPDATE users SET name = :name WHERE id = :id',
+      'mysql'
+    );
+    assert.ok(tables.includes('users'));
+  });
+});
+
+describe('sql.model mergeReviewResults', () => {
+  it('passes when only warnings present', () => {
+    const result = mergeReviewResults(
+      [{ severity: 'warning', message: 'slow query' }],
+      { passed: true, issues: [] }
+    );
+    assert.strictEqual(result.passed, true);
+    assert.strictEqual(result.issues.length, 1);
+  });
+
+  it('fails when any error issue present', () => {
+    const result = mergeReviewResults(
+      [{ severity: 'error', message: 'DROP not allowed' }],
+      { passed: true, issues: [] }
+    );
+    assert.strictEqual(result.passed, false);
+  });
+
+  it('treats empty AI veto as pass with no extra issues', () => {
+    const result = mergeReviewResults([], {
+      passed: false,
+      issues: []
+    });
+    assert.strictEqual(result.passed, true);
+    assert.strictEqual(result.issues.length, 0);
+  });
+
+  it('ignores AI passed=false when no error issues', () => {
+    const result = mergeReviewResults([], {
+      passed: false,
+      issues: [{ severity: 'warning', message: 'consider index' }]
+    });
+    assert.strictEqual(result.passed, true);
+    assert.strictEqual(result.issues.length, 1);
   });
 });

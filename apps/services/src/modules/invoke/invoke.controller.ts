@@ -92,7 +92,7 @@ export class InvokeController extends BaseController {
       const sql = toSqlItem(record!);
       method = sql.method;
 
-      if (sql.status === 'disabled') {
+      if (sql.status !== 'enabled') {
         this.error(403, 'Not Authorized');
       }
 

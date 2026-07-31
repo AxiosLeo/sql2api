@@ -6,6 +6,7 @@ import {
   Table2,
   FileCode2,
   ScrollText,
+  Settings2,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
 
@@ -55,6 +56,16 @@ export const sidebarData: SidebarData = {
           title: 'Invocation Logs',
           url: '/logs',
           icon: ScrollText,
+        },
+      ],
+    },
+    {
+      title: 'System',
+      items: [
+        {
+          title: 'Settings',
+          url: '/system',
+          icon: Settings2,
         },
       ],
     },

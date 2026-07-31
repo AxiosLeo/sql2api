@@ -11,6 +11,7 @@ export type SqlType = z.infer<typeof sqlTypeSchema>
 export const sqlStatusSchema = z.union([
   z.literal('enabled'),
   z.literal('disabled'),
+  z.literal('draft'),
 ])
 export type SqlStatus = z.infer<typeof sqlStatusSchema>
 

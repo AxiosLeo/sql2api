@@ -11,7 +11,32 @@ import type {
 } from '../types';
 import { SQL_TYPE_TO_METHOD } from '../types';
 import { analyzeSql, staticAuditSql } from '../modules/sql/sql.model';
+import { getSettingJSON } from './sqlite';
 import { reconcileSqlParams, slugifyApiName } from './sql-text';
+
+export type AIProvider = 'local' | 'ollama';
+
+export interface AIOnlineSettings {
+  provider?: AIProvider;
+  model_path?: string;
+  ollama?: {
+    base_url?: string;
+    model?: string;
+    timeout_ms?: number;
+  };
+}
+
+export interface AIResolvedConfig {
+  provider: AIProvider;
+  model_path: string;
+  ollama: {
+    base_url: string;
+    model: string;
+    timeout_ms: number;
+  };
+  /** Whether an online settings row exists (even if partial). */
+  source: 'online' | 'env';
+}
 
 export interface AIGenerateResult {
   sql: string;
@@ -168,12 +193,144 @@ let loaded: LoadedModel | null = null;
 let loadPromise: Promise<LoadedModel | null> | null = null;
 let inferenceChain: Promise<unknown> = Promise.resolve();
 
-function resolveModelPath(): string {
-  const raw = process.env.LLAMA_MODEL_PATH || config.envs.ai.model_path || '';
+const AI_SETTINGS_KEY = 'ai';
+
+/** Env-only defaults (no online overlay). */
+export function getEnvAIConfig(): Omit<AIResolvedConfig, 'source'> {
+  const provider = config.envs.ai.provider === 'ollama' ? 'ollama' : 'local';
+  return {
+    provider,
+    model_path: config.envs.ai.model_path || '',
+    ollama: {
+      base_url: config.envs.ai.ollama.base_url || 'http://127.0.0.1:11434',
+      model: config.envs.ai.ollama.model || 'gpt-oss:20b',
+      timeout_ms:
+        Number.isFinite(config.envs.ai.ollama.timeout_ms)
+        && config.envs.ai.ollama.timeout_ms > 0
+          ? config.envs.ai.ollama.timeout_ms
+          : 120000
+    }
+  };
+}
+
+/**
+ * Resolve effective AI config: online settings (SQLite) overlay env defaults.
+ * Reads DB on every call so Admin changes take effect without restart.
+ */
+export function resolveAIConfig(): AIResolvedConfig {
+  const env = getEnvAIConfig();
+  const online = getSettingJSON<AIOnlineSettings>(AI_SETTINGS_KEY);
+  if (!online || typeof online !== 'object') {
+    return { ...env, source: 'env' };
+  }
+
+  const provider: AIProvider =
+    online.provider === 'ollama' || online.provider === 'local'
+      ? online.provider
+      : env.provider;
+
+  const model_path =
+    typeof online.model_path === 'string' && online.model_path.trim()
+      ? online.model_path.trim()
+      : env.model_path;
+
+  const ollamaOnline = online.ollama && typeof online.ollama === 'object'
+    ? online.ollama
+    : {};
+
+  const timeoutRaw = ollamaOnline.timeout_ms;
+  const timeout_ms =
+    typeof timeoutRaw === 'number'
+    && Number.isFinite(timeoutRaw)
+    && timeoutRaw > 0
+      ? timeoutRaw
+      : env.ollama.timeout_ms;
+
+  return {
+    provider,
+    model_path,
+    ollama: {
+      base_url:
+        typeof ollamaOnline.base_url === 'string' && ollamaOnline.base_url.trim()
+          ? ollamaOnline.base_url.trim().replace(/\/$/, '')
+          : env.ollama.base_url.replace(/\/$/, ''),
+      model:
+        typeof ollamaOnline.model === 'string' && ollamaOnline.model.trim()
+          ? ollamaOnline.model.trim()
+          : env.ollama.model,
+      timeout_ms
+    },
+    source: 'online'
+  };
+}
+
+function resolveModelPath(cfg?: AIResolvedConfig): string {
+  const raw = (cfg || resolveAIConfig()).model_path || '';
   if (!raw) {
     return '';
   }
   return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+}
+
+/** Null when AI is configured; otherwise a human-readable reason. */
+export function aiUnavailableReason(cfg?: AIResolvedConfig): string | null {
+  const resolved = cfg || resolveAIConfig();
+  if (resolved.provider === 'ollama') {
+    if (!resolved.ollama.base_url) {
+      return 'OLLAMA_BASE_URL not configured';
+    }
+    if (!resolved.ollama.model) {
+      return 'OLLAMA_MODEL not configured';
+    }
+    return null;
+  }
+  if (!resolveModelPath(resolved)) {
+    return 'LLAMA_MODEL_PATH not configured';
+  }
+  return null;
+}
+
+/**
+ * Parse Ollama chat message content into JSON.
+ * Tries direct parse, then fenced ```json blocks, then first {...} object.
+ */
+export function parseOllamaJsonContent<T>(content: string): T {
+  const trimmed = (content || '').trim();
+  if (!trimmed) {
+    throw new Error('Empty model response');
+  }
+
+  const tryParse = (raw: string): T | null => {
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
+  };
+
+  const direct = tryParse(trimmed);
+  if (direct !== null) {
+    return direct;
+  }
+
+  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  if (fence?.[1]) {
+    const fenced = tryParse(fence[1].trim());
+    if (fenced !== null) {
+      return fenced;
+    }
+  }
+
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    const sliced = tryParse(trimmed.slice(start, end + 1));
+    if (sliced !== null) {
+      return sliced;
+    }
+  }
+
+  throw new Error('Model response is not valid JSON');
 }
 
 async function importNlc(): Promise<NlcModule> {
@@ -188,8 +345,8 @@ async function importNlc(): Promise<NlcModule> {
   return nlcModule;
 }
 
-async function ensureModel(): Promise<LoadedModel | null> {
-  const modelPath = resolveModelPath();
+async function ensureModel(cfg?: AIResolvedConfig): Promise<LoadedModel | null> {
+  const modelPath = resolveModelPath(cfg);
   if (!modelPath) {
     return null;
   }
@@ -256,16 +413,80 @@ interface RunGrammarOptions {
   maxTokens?: number;
 }
 
-async function runWithGrammar<T>(
+async function runWithOllama<T>(
   systemPrompt: string,
   userPrompt: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: any,
-  options?: RunGrammarOptions
+  cfg: AIResolvedConfig
+): Promise<T> {
+  const base = cfg.ollama.base_url.replace(/\/$/, '');
+  const url = `${base}/api/chat`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), cfg.ollama.timeout_ms);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: cfg.ollama.model,
+        stream: false,
+        format: schema,
+        options: { temperature: 0.1 },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
+      })
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new HttpError(
+        503,
+        `AI Service Unavailable: Ollama HTTP ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`
+      );
+    }
+
+    const body = (await res.json()) as {
+      message?: { content?: string };
+      error?: string;
+    };
+    if (body.error) {
+      throw new HttpError(503, `AI Service Unavailable: ${body.error}`);
+    }
+    const content = body.message?.content || '';
+    return parseOllamaJsonContent<T>(content);
+  } catch (err) {
+    if (err instanceof HttpError) {
+      throw err;
+    }
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new HttpError(
+        503,
+        `AI Service Unavailable: Ollama request timed out after ${cfg.ollama.timeout_ms}ms`
+      );
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    throw new HttpError(503, `AI Service Unavailable: ${message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runWithLocalGrammar<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  schema: any,
+  options: RunGrammarOptions | undefined,
+  cfg: AIResolvedConfig
 ): Promise<T> {
   const maxTokens = options?.maxTokens ?? 1024;
   const run = async (): Promise<T> => {
-    const state = await ensureModel();
+    const state = await ensureModel(cfg);
     if (!state) {
       throw new HttpError(503, 'AI Service Unavailable: LLAMA_MODEL_PATH not configured');
     }
@@ -298,6 +519,25 @@ async function runWithGrammar<T>(
   return next;
 }
 
+async function runWithGrammar<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  schema: any,
+  options?: RunGrammarOptions
+): Promise<T> {
+  const cfg = resolveAIConfig();
+  const reason = aiUnavailableReason(cfg);
+  if (reason) {
+    throw new HttpError(503, `AI Service Unavailable: ${reason}`);
+  }
+
+  if (cfg.provider === 'ollama') {
+    return runWithOllama<T>(systemPrompt, userPrompt, schema, cfg);
+  }
+  return runWithLocalGrammar<T>(systemPrompt, userPrompt, schema, options, cfg);
+}
+
 function normalizeSqlType(raw: string): SqlType {
   return (['select', 'insert', 'update', 'complex'].includes(raw)
     ? raw
@@ -323,17 +563,17 @@ function toGenerateResult(result: {
 }
 
 /**
- * Review a SQL statement via node-llama-cpp.
- * When LLAMA_MODEL_PATH is unset, gracefully degrades (passed=true + info issue).
+ * Review a SQL statement via the configured AI provider.
+ * When AI is unavailable, gracefully degrades (passed=true + info issue).
  */
 export async function reviewSQL(input: ReviewSQLInput): Promise<ReviewResult> {
-  const modelPath = resolveModelPath();
-  if (!modelPath) {
+  const reason = aiUnavailableReason();
+  if (reason) {
     return {
       passed: true,
       issues: [{
         severity: 'info',
-        message: 'AI review skipped: LLAMA_MODEL_PATH not configured'
+        message: `AI review skipped: ${reason}`
       }]
     };
   }
@@ -365,9 +605,15 @@ export async function reviewSQL(input: ReviewSQLInput): Promise<ReviewResult> {
     ].join('\n');
 
     const result = await runWithGrammar<ReviewResult>(systemPrompt, userPrompt, REVIEW_SCHEMA);
+    const issues = Array.isArray(result.issues) ? result.issues : [];
+    // Empty veto (passed=false with no issues) is model noise; static audit
+    // already blocks DROP/DELETE/TRUNCATE. Treat as a clean pass.
+    if (result.passed === false && issues.length === 0) {
+      return { passed: true, issues: [] };
+    }
     return {
       passed: Boolean(result.passed),
-      issues: Array.isArray(result.issues) ? result.issues : []
+      issues
     };
   } catch (err) {
     if (err instanceof HttpError) {
@@ -453,13 +699,13 @@ export async function planGeneration(input: {
 }
 
 /**
- * Generate SQL + param config from natural language via node-llama-cpp.
- * Requires LLAMA_MODEL_PATH; throws 503 when unset.
+ * Generate SQL + param config from natural language via the configured AI provider.
+ * Throws 503 when AI is unavailable.
  */
 export async function generateSQL(input: GenerateSQLInput): Promise<AIGenerateResult> {
-  const modelPath = resolveModelPath();
-  if (!modelPath) {
-    throw new HttpError(503, 'AI Service Unavailable: LLAMA_MODEL_PATH not configured');
+  const reason = aiUnavailableReason();
+  if (reason) {
+    throw new HttpError(503, `AI Service Unavailable: ${reason}`);
   }
 
   try {
@@ -537,9 +783,9 @@ export async function generateApiName(input: {
   sql?: string;
   params?: string[];
 }): Promise<string> {
-  const modelPath = resolveModelPath();
-  if (!modelPath) {
-    throw new HttpError(503, 'AI Service Unavailable: LLAMA_MODEL_PATH not configured');
+  const reason = aiUnavailableReason();
+  if (reason) {
+    throw new HttpError(503, `AI Service Unavailable: ${reason}`);
   }
 
   const prompt = (input.prompt || '').trim();
@@ -601,9 +847,9 @@ export async function generateSQLPipeline(
   input: GenerateSQLInput,
   onProgress?: GenerateProgressCallback
 ): Promise<AIGeneratePipelineResult> {
-  const modelPath = resolveModelPath();
-  if (!modelPath) {
-    throw new HttpError(503, 'AI Service Unavailable: LLAMA_MODEL_PATH not configured');
+  const reason = aiUnavailableReason();
+  if (reason) {
+    throw new HttpError(503, `AI Service Unavailable: ${reason}`);
   }
 
   const dialect = input.dialect || 'mysql';

@@ -24,7 +24,9 @@ type DataTableRowActionsProps = {
 export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { setOpen, setCurrentRow } = useSqls()
   const queryClient = useQueryClient()
-  const isEnabled = row.original.status === 'enabled'
+  const status = row.original.status
+  const isEnabled = status === 'enabled'
+  const isDraft = status === 'draft'
 
   const statusMutation = useMutation({
     mutationFn: () =>
@@ -33,9 +35,21 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sqls'] })
-      toast.success(isEnabled ? 'SQL API disabled.' : 'SQL API enabled.')
+      toast.success(
+        isEnabled
+          ? 'SQL API disabled.'
+          : isDraft
+            ? 'SQL API enabled.'
+            : 'SQL API enabled.'
+      )
     },
     onError: (err) => {
+      if (err instanceof AxiosError && err.response?.status === 422) {
+        toast.error(
+          'Review required before enabling. Open Edit and run Review first.'
+        )
+        return
+      }
       const message =
         err instanceof AxiosError
           ? (err.response?.data as { message?: string })?.message || err.message

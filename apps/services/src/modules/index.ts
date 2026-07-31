@@ -10,6 +10,7 @@ import {
 } from './docs/docs.router';
 import invokeRouter from './invoke/invoke.router';
 import modelRouter from './model/model.router';
+import settingRouter from './setting/setting.router';
 import sqlRouter from './sql/sql.router';
 import statRouter from './stat/stat.router';
 
@@ -47,8 +48,9 @@ logged.add(connectionRouter);
 logged.add(modelRouter);
 logged.add(sqlRouter);
 logged.add(invokeRouter);
-// Stats are dashboard-only: intentionally not mounted on /openapi.
+// Stats / settings are dashboard-only: intentionally not mounted on /openapi.
 logged.add(statRouter);
+logged.add(settingRouter);
 logged.add(openApiAdminRouter);
 adminApi.add(logged);
 

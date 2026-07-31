@@ -787,6 +787,14 @@
             "items": {
               "$ref": "#/components/schemas/SqlParamDef"
             }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "enabled",
+              "draft"
+            ],
+            "description": "创建为 draft 可跳过审计门禁暂存；默认 enabled"
           }
         }
       },
@@ -817,7 +825,8 @@
             "type": "string",
             "enum": [
               "enabled",
-              "disabled"
+              "disabled",
+              "draft"
             ]
           }
         }
@@ -932,7 +941,8 @@
             "type": "string",
             "enum": [
               "enabled",
-              "disabled"
+              "disabled",
+              "draft"
             ]
           },
           "review": {

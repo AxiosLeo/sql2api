@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS sqls (
   sql_type TEXT NOT NULL CHECK(sql_type IN ('select', 'insert', 'update', 'complex')),
   method TEXT NOT NULL CHECK(method IN ('GET', 'POST', 'PATCH')),
   params_json TEXT NOT NULL DEFAULT '[]',
-  status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled')),
+  status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled', 'draft')),
   review_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -195,6 +195,12 @@ CREATE TABLE IF NOT EXISTS invoke_logs (
   row_count INTEGER,
   params TEXT,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_app_id ON api_keys(app_id);
@@ -493,6 +499,7 @@ export function getDB(): SqliteDatabase {
   db.exec(SQLITE_DDL);
   migrateInvokeLogsParams(db);
   migrateSqlsTypeCheck(db);
+  migrateSqlsStatusCheck(db);
 
   dbInstance = db;
   dbPathResolved = resolved;
@@ -540,7 +547,7 @@ CREATE TABLE sqls_new (
   sql_type TEXT NOT NULL CHECK(sql_type IN ('select', 'insert', 'update', 'complex')),
   method TEXT NOT NULL CHECK(method IN ('GET', 'POST', 'PATCH')),
   params_json TEXT NOT NULL DEFAULT '[]',
-  status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled')),
+  status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled', 'draft')),
   review_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -557,6 +564,71 @@ SELECT
   CASE WHEN sql_type = 'delete' THEN 'complex' ELSE sql_type END,
   CASE WHEN method = 'DELETE' THEN 'POST' ELSE method END,
   params_json, status, review_json, created_at, updated_at
+FROM sqls;
+DROP TABLE sqls;
+ALTER TABLE sqls_new RENAME TO sqls;
+CREATE INDEX IF NOT EXISTS idx_sqls_app_id ON sqls(app_id);
+CREATE INDEX IF NOT EXISTS idx_sqls_connection_id ON sqls(connection_id);
+`);
+    db.exec('COMMIT');
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
+    throw err;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
+/**
+ * Rebuild `sqls` when the status CHECK constraint predates the `draft` value.
+ * SQLite cannot ALTER CHECK constraints in place.
+ */
+function migrateSqlsStatusCheck(db: SqliteDatabase): void {
+  const row = db
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sqls'"
+    )
+    .get() as { sql?: string } | undefined;
+  if (!row?.sql) {
+    return;
+  }
+  if (row.sql.includes("'draft'")) {
+    return;
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec('BEGIN');
+    db.exec(`
+CREATE TABLE sqls_new (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  sql_text TEXT NOT NULL,
+  sql_type TEXT NOT NULL CHECK(sql_type IN ('select', 'insert', 'update', 'complex')),
+  method TEXT NOT NULL CHECK(method IN ('GET', 'POST', 'PATCH')),
+  params_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled', 'draft')),
+  review_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE,
+  FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE CASCADE,
+  UNIQUE(app_id, name)
+);
+INSERT INTO sqls_new (
+  id, app_id, connection_id, name, description, sql_text,
+  sql_type, method, params_json, status, review_json, created_at, updated_at
+)
+SELECT
+  id, app_id, connection_id, name, description, sql_text,
+  sql_type, method, params_json, status, review_json, created_at, updated_at
 FROM sqls;
 DROP TABLE sqls;
 ALTER TABLE sqls_new RENAME TO sqls;
@@ -1330,4 +1402,53 @@ export function purgeInvokeLogs(retentionDays: number): number {
     .prepare('DELETE FROM invoke_logs WHERE created_at < ?')
     .run(cutoff);
   return result.changes;
+}
+
+// ─── settings (key/value JSON) ──────────────────────────────────────────────
+
+export interface SettingRecord {
+  key: string;
+  value_json: string;
+  updated_at: string;
+}
+
+/** Read a JSON setting; returns null when missing or JSON is invalid. */
+export function getSettingJSON<T>(key: string): T | null {
+  const row = getDB()
+    .prepare('SELECT * FROM settings WHERE key = ?')
+    .get(key) as SettingRecord | undefined;
+  if (!row) {
+    return null;
+  }
+  try {
+    return JSON.parse(row.value_json) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Upsert a JSON setting. */
+export function setSettingJSON(key: string, value: unknown): SettingRecord {
+  const now = nowISO();
+  const row: SettingRecord = {
+    key,
+    value_json: JSON.stringify(value ?? null),
+    updated_at: now
+  };
+  getDB()
+    .prepare(
+      `INSERT INTO settings (key, value_json, updated_at)
+       VALUES (@key, @value_json, @updated_at)
+       ON CONFLICT(key) DO UPDATE SET
+         value_json = excluded.value_json,
+         updated_at = excluded.updated_at`
+    )
+    .run(row);
+  return row;
+}
+
+/** Delete a setting by key. Returns true when a row was removed. */
+export function deleteSetting(key: string): boolean {
+  const result = getDB().prepare('DELETE FROM settings WHERE key = ?').run(key);
+  return result.changes > 0;
 }

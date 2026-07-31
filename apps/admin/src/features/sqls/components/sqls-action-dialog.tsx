@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -70,7 +70,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   sql: z.string().min(1, 'SQL is required.'),
   params: z.array(paramSchema),
-  status: z.enum(['enabled', 'disabled']),
+  status: z.enum(['enabled', 'disabled', 'draft']),
 })
 
 type SqlForm = z.infer<typeof formSchema>
@@ -199,6 +199,12 @@ export function SqlsActionDialog({
   } | null>(null)
   const [review, setReview] = useState<ReviewResult | null>(null)
   const [genProgress, setGenProgress] = useState<GenerateProgressEvent[]>([])
+  /** Snapshot of sql+connection that last passed Review (or edit baseline). */
+  const [reviewedFor, setReviewedFor] = useState<{
+    sql: string
+    connection_id: string
+  } | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const connectionsQuery = useQuery({
     queryKey: ['connections', { page: 1, size: 100 }],
@@ -225,6 +231,18 @@ export function SqlsActionDialog({
 
   const connectionId = form.watch('connection_id')
   const sqlValue = form.watch('sql')
+  const statusValue = form.watch('status')
+
+  const needsReview = useMemo(() => {
+    if (statusValue === 'draft') return false
+    return !(
+      reviewedFor !== null &&
+      reviewedFor.sql === sqlValue &&
+      reviewedFor.connection_id === connectionId
+    )
+  }, [statusValue, reviewedFor, sqlValue, connectionId])
+
+  const canSave = !needsReview
 
   const selectedConnection = useMemo(
     () =>
@@ -250,6 +268,7 @@ export function SqlsActionDialog({
     setAiMeta(null)
     setReview(null)
     setGenProgress([])
+    setReviewedFor(null)
     if (currentRow) {
       form.reset({
         connection_id: currentRow.connection_id,
@@ -268,6 +287,12 @@ export function SqlsActionDialog({
         status: currentRow.status,
       })
       setReview(currentRow.review)
+      if (currentRow.review?.passed && currentRow.status !== 'draft') {
+        setReviewedFor({
+          sql: currentRow.sql,
+          connection_id: currentRow.connection_id,
+        })
+      }
     } else {
       form.reset({
         connection_id: '',
@@ -308,11 +333,20 @@ export function SqlsActionDialog({
         description: values.description || '',
         sql: values.sql,
         params,
+        status: values.status === 'draft' ? 'draft' : 'enabled',
       })
     },
-    onSuccess: () => {
+    onSuccess: (_data, values) => {
       queryClient.invalidateQueries({ queryKey: ['sqls'] })
-      toast.success(isEdit ? 'SQL API updated.' : 'SQL API created.')
+      toast.success(
+        values.status === 'draft'
+          ? isEdit
+            ? 'Draft saved.'
+            : 'Draft created.'
+          : isEdit
+            ? 'SQL API updated.'
+            : 'SQL API created.'
+      )
       onOpenChange(false)
     },
     onError: (err) => {
@@ -323,6 +357,7 @@ export function SqlsActionDialog({
       const reviewResult = extractReviewResult(err)
       if (reviewResult) {
         setReview(reviewResult)
+        scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
         toast.error('SQL review failed. Fix the issues and try again.')
         return
       }
@@ -405,6 +440,7 @@ export function SqlsActionDialog({
         steps: result.steps,
       })
       setReview(null)
+      setReviewedFor(null)
       setSqlTab('write')
       toast.success('SQL generated. Review and save when ready.')
     },
@@ -419,7 +455,7 @@ export function SqlsActionDialog({
       }
       if (err instanceof GenerateSqlStreamError && err.status === 503) {
         toast.error(
-          err.message || 'AI service unavailable. Check LLAMA_MODEL_PATH.'
+          err.message || 'AI service unavailable. Check AI provider configuration.'
         )
         return
       }
@@ -461,7 +497,7 @@ export function SqlsActionDialog({
       if (err instanceof AxiosError && err.response?.status === 503) {
         toast.error(
           (err.response?.data as { message?: string })?.message ||
-            'AI service unavailable. Check LLAMA_MODEL_PATH.'
+            'AI service unavailable. Check AI provider configuration.'
         )
         return
       }
@@ -490,6 +526,15 @@ export function SqlsActionDialog({
     },
     onSuccess: (result) => {
       setReview(result)
+      if (result.passed) {
+        setReviewedFor({
+          sql: sqlValue,
+          connection_id: connectionId,
+        })
+      } else {
+        setReviewedFor(null)
+      }
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
       toast.success(result.passed ? 'Review passed.' : 'Review found issues.')
     },
     onError: (err) => {
@@ -513,7 +558,21 @@ export function SqlsActionDialog({
   })
 
   const onSubmit = (values: SqlForm) => {
+    if (values.status !== 'draft' && needsReview) {
+      toast.error('Run Review before saving.')
+      return
+    }
     saveMutation.mutate(values)
+  }
+
+  const onSaveDraft = () => {
+    const values = form.getValues()
+    form.clearErrors()
+    // Validate required fields without changing status in the form UI
+    void form.trigger().then((ok) => {
+      if (!ok) return
+      saveMutation.mutate({ ...values, status: 'draft' })
+    })
   }
 
   const toggleModel = (id: string, checked: boolean) => {
@@ -551,8 +610,10 @@ export function SqlsActionDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             className='flex min-h-0 flex-1 flex-col'
           >
-            <div className='min-h-0 flex-1 overflow-y-auto px-6 py-4'>
+            <div ref={scrollRef} className='min-h-0 flex-1 overflow-y-auto px-6 py-4'>
               <div className='space-y-4'>
+                <ReviewIssuesPanel review={review} />
+
                 <FormField
                   control={form.control}
                   name='connection_id'
@@ -631,6 +692,7 @@ export function SqlsActionDialog({
                             items={[
                               { label: 'Enabled', value: 'enabled' },
                               { label: 'Disabled', value: 'disabled' },
+                              { label: 'Draft', value: 'draft' },
                             ]}
                           />
                           <FormMessage />
@@ -952,7 +1014,6 @@ export function SqlsActionDialog({
                   )}
                 </div>
 
-                <ReviewIssuesPanel review={review} />
               </div>
             </div>
           </form>
@@ -967,13 +1028,30 @@ export function SqlsActionDialog({
           >
             {reviewMutation.isPending ? 'Reviewing...' : 'Review'}
           </Button>
-          <Button
-            type='submit'
-            form='sql-form'
-            disabled={saveMutation.isPending}
-          >
-            {saveMutation.isPending ? 'Saving...' : 'Save'}
-          </Button>
+          <div className='flex flex-wrap items-center justify-end gap-2'>
+            {needsReview && statusValue !== 'draft' ? (
+              <span className='text-xs text-muted-foreground'>
+                Run Review before saving
+              </span>
+            ) : null}
+            {!isEdit ? (
+              <Button
+                type='button'
+                variant='secondary'
+                disabled={saveMutation.isPending || !sqlValue.trim()}
+                onClick={onSaveDraft}
+              >
+                Save Draft
+              </Button>
+            ) : null}
+            <Button
+              type='submit'
+              form='sql-form'
+              disabled={saveMutation.isPending || !canSave}
+            >
+              {saveMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

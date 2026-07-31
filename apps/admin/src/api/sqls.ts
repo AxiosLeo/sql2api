@@ -2,7 +2,7 @@ import { apiRequest } from '@/lib/api-client'
 
 export type SqlType = 'select' | 'insert' | 'update' | 'complex'
 export type HttpMethod = 'GET' | 'POST' | 'PATCH'
-export type SqlStatus = 'enabled' | 'disabled'
+export type SqlStatus = 'enabled' | 'disabled' | 'draft'
 export type ReviewSeverity = 'error' | 'warning' | 'info'
 
 export interface SqlParamDef {
@@ -64,6 +64,7 @@ export interface CreateSqlBody {
   description?: string
   sql: string
   params?: SqlParamDef[]
+  status?: 'enabled' | 'draft'
 }
 
 export interface UpdateSqlBody {

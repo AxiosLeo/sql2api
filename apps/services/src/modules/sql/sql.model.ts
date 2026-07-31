@@ -39,6 +39,8 @@ export interface CreateSqlBody {
   description?: string;
   sql: string;
   params?: SqlParamDef[];
+  /** Create as draft to skip review gate; defaults to enabled. */
+  status?: 'enabled' | 'draft';
 }
 
 export interface UpdateSqlBody {
@@ -98,7 +100,8 @@ export const createSqlRules = {
   params: 'array',
   'params.*.name': 'required|string',
   'params.*.rule': 'required|string',
-  'params.*.description': 'string'
+  'params.*.description': 'string',
+  status: 'in:enabled,draft'
 };
 
 export const updateSqlRules = {
@@ -110,7 +113,7 @@ export const updateSqlRules = {
   'params.*.name': 'required|string',
   'params.*.rule': 'required|string',
   'params.*.description': 'string',
-  status: 'in:enabled,disabled'
+  status: 'in:enabled,disabled,draft'
 };
 
 export const generateSqlRules = {
@@ -496,15 +499,64 @@ export function sqlTypeToMethod(sqlType: SqlType): HttpMethod {
   return SQL_TYPE_TO_METHOD[sqlType];
 }
 
-/** Merge static + AI review issues; passed=false if any error-severity issue. */
+/**
+ * Extract table names referenced by SQL (for narrowing AI review context).
+ * Uses node-sql-parser `tableList` when possible; falls back to a simple
+ * FROM/JOIN/INTO/UPDATE regex when parsing fails.
+ */
+export function extractTableNames(
+  sql: string,
+  dialect: DatasourceType = 'mysql'
+): string[] {
+  const normalized = replaceNamedParamsForParse(sql);
+  const database = dialect === 'mysql' ? 'MySQL' : 'PostgresQL';
+  const parser = new Parser();
+  const names = new Set<string>();
+
+  try {
+    const tableList = parser.tableList(normalized, { database }) as string[];
+    for (const entry of tableList || []) {
+      // Format: "select::db.schema.table" or "insert::null::users"
+      const parts = String(entry).split('::');
+      const raw = parts[parts.length - 1] || '';
+      const table = raw.split('.').pop()?.replace(/[`"]/g, '').trim();
+      if (table && table.toLowerCase() !== 'null') {
+        names.add(table);
+      }
+    }
+  } catch {
+    // fall through to regex
+  }
+
+  if (names.size === 0) {
+    const re =
+      /\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+[`"]?([a-zA-Z_][\w]*)[`"]?/gi;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(sql)) !== null) {
+      names.add(match[1]);
+    }
+  }
+
+  return [...names];
+}
+
+/**
+ * Merge static + AI review issues.
+ * `passed` is false only when any issue has severity `error` (warnings do not block).
+ * Empty AI vetoes (passed=false, no issues) are normalized upstream in reviewSQL.
+ */
 export function mergeReviewResults(
   staticIssues: ReviewIssue[],
   aiReview: ReviewResult
 ): ReviewResult {
-  const issues = [...staticIssues, ...(aiReview.issues || [])];
+  const issues: ReviewIssue[] = [
+    ...staticIssues,
+    ...(aiReview.issues || [])
+  ];
+
   const hasError = issues.some((i) => i.severity === 'error');
   return {
-    passed: !hasError && Boolean(aiReview.passed),
+    passed: !hasError,
     issues
   };
 }

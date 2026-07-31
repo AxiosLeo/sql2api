@@ -11,12 +11,14 @@ import {
   decryptPassword,
   deleteConnection,
   deleteModel,
+  deleteSetting,
   deleteSql,
   getConnection,
   getConnectionConfig,
   getDB,
   getInvokeLog,
   getInvokeStats,
+  getSettingJSON,
   getSql,
   insertInvokeLog,
   listApps,
@@ -27,6 +29,7 @@ import {
   removeApp,
   resolveApiKey,
   revokeApiKey,
+  setSettingJSON,
   updateConnection,
   updateSql,
   upsertModel
@@ -193,6 +196,121 @@ describe('sqlite service', function () {
     assert.ok(removeApp(app.id));
   });
 
+  it('supports draft status on sqls', () => {
+    const app = createApp('draft-app');
+    const conn = createConnection({
+      app_id: app.id,
+      name: 'draft-mysql',
+      type: 'mysql',
+      host: '127.0.0.1',
+      port: 3306,
+      username: 'root',
+      password: 'x',
+      database: 'demo'
+    });
+
+    const draft = createSql({
+      app_id: app.id,
+      connection_id: conn.id,
+      name: 'draft-query',
+      sql_text: 'SELECT 1',
+      sql_type: 'select',
+      method: 'GET',
+      status: 'draft',
+      review: {
+        passed: false,
+        issues: [{ severity: 'info', message: 'Saved as draft — not reviewed' }]
+      }
+    });
+    assert.strictEqual(draft.status, 'draft');
+
+    const promoted = updateSql(app.id, draft.id, { status: 'enabled' });
+    assert.strictEqual(promoted!.status, 'enabled');
+
+    assert.ok(deleteSql(app.id, draft.id));
+    assert.ok(removeApp(app.id));
+  });
+
+  it('migrates sqls status CHECK to include draft', () => {
+    closeDB();
+    const legacyPath = path.join(tmpDir, 'legacy-status.db');
+    process.env.SQLITE_PATH = legacyPath;
+
+    // Bootstrap a minimal DB whose sqls CHECK lacks draft, then reopen via getDB.
+    const Database = require('better-sqlite3') as typeof import('better-sqlite3');
+    const raw = new Database(legacyPath);
+    raw.exec(`
+CREATE TABLE apps (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE connections (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  host TEXT NOT NULL,
+  port INTEGER NOT NULL,
+  username TEXT NOT NULL,
+  password_enc TEXT NOT NULL,
+  database TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE sqls (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  sql_text TEXT NOT NULL,
+  sql_type TEXT NOT NULL CHECK(sql_type IN ('select', 'insert', 'update', 'complex')),
+  method TEXT NOT NULL CHECK(method IN ('GET', 'POST', 'PATCH')),
+  params_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled')),
+  review_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+INSERT INTO apps VALUES ('a1','legacy','', 'active','t','t');
+INSERT INTO connections VALUES (
+  'c1','a1','c','mysql','127.0.0.1',3306,'u','enc','db','active','t','t'
+);
+INSERT INTO sqls VALUES (
+  's1','a1','c1','legacy-sql','','SELECT 1','select','GET','[]','enabled','{}','t','t'
+);
+`);
+    raw.close();
+
+    const db = getDB();
+    const ddl = db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sqls'"
+      )
+      .get() as { sql: string };
+    assert.ok(ddl.sql.includes("'draft'"), 'CHECK should include draft');
+
+    const draft = createSql({
+      app_id: 'a1',
+      connection_id: 'c1',
+      name: 'after-migrate-draft',
+      sql_text: 'SELECT 2',
+      sql_type: 'select',
+      method: 'GET',
+      status: 'draft'
+    });
+    assert.strictEqual(draft.status, 'draft');
+
+    closeDB();
+    process.env.SQLITE_PATH = path.join(tmpDir, 'test.db');
+    getDB();
+  });
+
   it('records invoke logs, aggregates stats, and purges expired rows', () => {
     const app = createApp('stats-app');
     const conn = createConnection({
@@ -276,5 +394,29 @@ describe('sqlite service', function () {
     // Stats window still excludes purged rows
     const afterPurge = getInvokeStats(app.id, { days: 30 });
     assert.strictEqual(afterPurge.total, 2);
+  });
+
+  it('stores and deletes JSON settings', () => {
+    assert.strictEqual(getSettingJSON('ai'), null);
+
+    setSettingJSON('ai', {
+      provider: 'ollama',
+      ollama: { base_url: 'http://127.0.0.1:11434', model: 'gpt-oss:20b' }
+    });
+    const loaded = getSettingJSON<{
+      provider: string;
+      ollama: { base_url: string; model: string };
+    }>('ai');
+    assert.ok(loaded);
+    assert.strictEqual(loaded!.provider, 'ollama');
+    assert.strictEqual(loaded!.ollama.model, 'gpt-oss:20b');
+
+    setSettingJSON('ai', { provider: 'local' });
+    const updated = getSettingJSON<{ provider: string }>('ai');
+    assert.strictEqual(updated!.provider, 'local');
+
+    assert.strictEqual(deleteSetting('ai'), true);
+    assert.strictEqual(getSettingJSON('ai'), null);
+    assert.strictEqual(deleteSetting('ai'), false);
   });
 });
