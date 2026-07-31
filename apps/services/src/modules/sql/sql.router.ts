@@ -1,6 +1,7 @@
 import { Router } from '@axiosleo/koapp';
 import controller from './sql.controller';
 import {
+  applyReviewRules,
   createSqlRules,
   generateNameRules,
   generateSqlRules,
@@ -30,6 +31,10 @@ router.post('/generate-name', (ctx) => controller.generateName(ctx), {
 
 router.post('/review', (ctx) => controller.review(ctx), {
   body: { rules: reviewSqlRules }
+});
+
+router.post('/apply-review', (ctx) => controller.applyReview(ctx), {
+  body: { rules: applyReviewRules }
 });
 
 router.get('', (ctx) => controller.list(ctx), {

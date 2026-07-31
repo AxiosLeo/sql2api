@@ -776,6 +776,65 @@ async function repairSQL(input: {
 }
 
 /**
+ * Apply review suggestions to rewrite SQL via the configured AI provider.
+ * Reuses repairSQL under a fixed "apply suggestions" prompt.
+ */
+export async function applyReviewSuggestions(input: {
+  sql: string;
+  dialect?: DatasourceType;
+  models?: ModelContext[];
+  issues: string[];
+}): Promise<AIGenerateResult> {
+  const reason = aiUnavailableReason();
+  if (reason) {
+    throw new HttpError(503, `AI Service Unavailable: ${reason}`);
+  }
+
+  const issues = (input.issues || []).map((i) => i.trim()).filter(Boolean);
+  if (issues.length === 0) {
+    throw new HttpError(400, 'At least one review issue is required');
+  }
+
+  const dialect = input.dialect || 'mysql';
+  const models = input.models || [];
+
+  try {
+    let generated = await repairSQL({
+      prompt:
+        'Apply the review suggestions while preserving the query behavior.',
+      dialect,
+      models,
+      sql: input.sql,
+      issues
+    });
+
+    generated = {
+      ...generated,
+      params: reconcileSqlParams(generated.sql, generated.params)
+    };
+
+    try {
+      const typed = analyzeSql(generated.sql, dialect);
+      generated = {
+        ...generated,
+        sql_type: typed.sql_type,
+        method: typed.method
+      };
+    } catch {
+      // keep AI-provided type when parse fails
+    }
+
+    return generated;
+  } catch (err) {
+    if (err instanceof HttpError) {
+      throw err;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    throw new HttpError(503, `AI Service Unavailable: ${message}`);
+  }
+}
+
+/**
  * Suggest a kebab-case API name from prompt / SQL / param names.
  */
 export async function generateApiName(input: {

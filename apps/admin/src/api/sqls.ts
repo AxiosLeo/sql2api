@@ -114,11 +114,24 @@ export interface ReviewSqlBody {
   connection_id?: string
 }
 
+export interface ApplyReviewBody {
+  connection_id: string
+  sql: string
+  issues: ReviewIssue[]
+}
+
 export function listSqls(params: SqlListQuery = {}): Promise<SqlListData> {
   return apiRequest<SqlListData>({
     method: 'GET',
     url: '/api/sqls',
     params,
+  })
+}
+
+export function getSql(id: string): Promise<SqlItem> {
+  return apiRequest<SqlItem>({
+    method: 'GET',
+    url: `/api/sqls/${id}`,
   })
 }
 
@@ -321,6 +334,15 @@ export function reviewSql(body: ReviewSqlBody): Promise<ReviewResult> {
   return apiRequest<ReviewResult>({
     method: 'POST',
     url: '/api/sqls/review',
+    data: body,
+    timeout: 120_000,
+  })
+}
+
+export function applySqlReview(body: ApplyReviewBody): Promise<GenerateSqlResult> {
+  return apiRequest<GenerateSqlResult>({
+    method: 'POST',
+    url: '/api/sqls/apply-review',
     data: body,
     timeout: 120_000,
   })

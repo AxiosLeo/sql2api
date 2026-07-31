@@ -1,5 +1,6 @@
 import { DotsHorizontalIcon } from '@radix-ui/react-icons'
 import { type Row } from '@tanstack/react-table'
+import { Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { Ban, CheckCircle2, Copy, FileJson, Pencil, Trash2 } from 'lucide-react'
@@ -46,7 +47,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     onError: (err) => {
       if (err instanceof AxiosError && err.response?.status === 422) {
         toast.error(
-          'Review required before enabling. Open Edit and run Review first.'
+          'Review required before enabling. Open the editor and run Review first.'
         )
         return
       }
@@ -93,16 +94,17 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-[200px]'>
-        <DropdownMenuItem
-          onClick={() => {
-            setCurrentRow(row.original)
-            setOpen('edit')
-          }}
-        >
-          Edit
-          <DropdownMenuShortcut>
-            <Pencil size={16} />
-          </DropdownMenuShortcut>
+        <DropdownMenuItem asChild>
+          <Link
+            to='/sqls/$sqlId/edit'
+            params={{ sqlId: row.original.id }}
+            className='cursor-pointer'
+          >
+            Edit
+            <DropdownMenuShortcut>
+              <Pencil size={16} />
+            </DropdownMenuShortcut>
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={copyEndpoint}>
           Copy Endpoint

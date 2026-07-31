@@ -84,6 +84,18 @@ export interface ReviewSqlBody {
   connection_id?: string;
 }
 
+export interface ApplyReviewIssue {
+  severity?: string;
+  message: string;
+  suggestion?: string;
+}
+
+export interface ApplyReviewBody {
+  connection_id: string;
+  sql: string;
+  issues: ApplyReviewIssue[];
+}
+
 export interface SqlListQuery {
   page?: number;
   size?: number;
@@ -133,6 +145,15 @@ export const generateNameRules = {
 export const reviewSqlRules = {
   sql: 'required|string',
   connection_id: 'string'
+};
+
+export const applyReviewRules = {
+  connection_id: 'required|string',
+  sql: 'required|string',
+  issues: 'required|array|min:1',
+  'issues.*.message': 'required|string',
+  'issues.*.severity': 'string',
+  'issues.*.suggestion': 'string'
 };
 
 export const sqlIdRules = {

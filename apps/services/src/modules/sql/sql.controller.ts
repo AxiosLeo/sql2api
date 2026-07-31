@@ -3,6 +3,7 @@ import type { KoaContext } from '@axiosleo/koapp';
 import { HttpError, middlewares } from '@axiosleo/koapp';
 import { BaseController } from '../controller';
 import type {
+  ApplyReviewBody,
   CreateSqlBody,
   GenerateNameBody,
   GenerateResult,
@@ -28,7 +29,7 @@ import type {
   SqlStatus
 } from '../../types';
 import type { GenerateProgressEvent, ModelContext } from '../../services/ai';
-import { generateApiName, generateSQLPipeline, reviewSQL } from '../../services/ai';
+import { applyReviewSuggestions, generateApiName, generateSQLPipeline, reviewSQL } from '../../services/ai';
 import {
   createSql,
   deleteSql,
@@ -475,6 +476,63 @@ export class SqlController extends BaseController {
       sql_type: analysis.sql_type,
       method: analysis.method
     });
+  }
+
+  async applyReview(context: KoaContext) {
+    const appId = this.appId(context);
+    const body = context.body as ApplyReviewBody;
+
+    const conn = getConnection(appId, body.connection_id);
+    if (!conn) {
+      this.error(404, 'Not Found Connection');
+    }
+
+    const issues = (body.issues || [])
+      .map((issue) => {
+        const severity = (issue.severity || '').trim();
+        const message = (issue.message || '').trim();
+        const suggestion = (issue.suggestion || '').trim();
+        if (!message) return '';
+        const parts: string[] = [];
+        if (severity) parts.push(`[${severity}]`);
+        parts.push(message);
+        if (suggestion) parts.push(`| Suggestion: ${suggestion}`);
+        return parts.join(' ');
+      })
+      .filter(Boolean);
+
+    if (issues.length === 0) {
+      this.error(400, 'At least one review issue is required');
+    }
+
+    const tables = extractTableNames(body.sql, conn!.type);
+    const models = this.loadModelContexts(
+      appId,
+      body.connection_id,
+      undefined,
+      tables
+    );
+
+    try {
+      const result = await applyReviewSuggestions({
+        sql: body.sql,
+        dialect: conn!.type,
+        models,
+        issues
+      });
+      this.success({
+        sql: result.sql,
+        sql_type: result.sql_type,
+        method: result.method,
+        params: result.params,
+        explanation: result.explanation
+      });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        this.error(err.status || 500, err.message);
+      }
+      throw err;
+    }
   }
 
   async list(context: KoaContext) {

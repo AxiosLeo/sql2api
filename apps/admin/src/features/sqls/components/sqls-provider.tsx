@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import useDialogState from '@/hooks/use-dialog-state'
 import { type Sql } from '../data/schema'
 
-type SqlsDialogType = 'create' | 'edit' | 'delete'
+type SqlsDialogType = 'delete'
 
 type SqlsContextType = {
   open: SqlsDialogType | null
