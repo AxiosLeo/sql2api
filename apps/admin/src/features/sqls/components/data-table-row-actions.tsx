@@ -2,9 +2,9 @@ import { DotsHorizontalIcon } from '@radix-ui/react-icons'
 import { type Row } from '@tanstack/react-table'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
-import { Ban, CheckCircle2, Copy, Pencil, Trash2 } from 'lucide-react'
+import { Ban, CheckCircle2, Copy, FileJson, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { updateSql } from '@/api/sqls'
+import { getSqlOpenApiDoc, updateSql } from '@/api/sqls'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -53,6 +53,20 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     }
   }
 
+  const copyApiDoc = async () => {
+    try {
+      const spec = await getSqlOpenApiDoc(row.original.id)
+      await navigator.clipboard.writeText(JSON.stringify(spec, null, 2))
+      toast.success('API Doc copied.')
+    } catch (err) {
+      const message =
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string })?.message || err.message
+          : 'Failed to copy API Doc.'
+      toast.error(message)
+    }
+  }
+
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -80,6 +94,12 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           Copy Endpoint
           <DropdownMenuShortcut>
             <Copy size={16} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={copyApiDoc}>
+          Copy API Doc
+          <DropdownMenuShortcut>
+            <FileJson size={16} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem

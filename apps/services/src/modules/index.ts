@@ -4,6 +4,10 @@ import { adminAuthMiddleware } from '../middlewares/admin-auth';
 import adminRouter from './admin/admin.router';
 import appRouter from './app/app.router';
 import connectionRouter from './connection/connection.router';
+import {
+  openApiAdminRouter,
+  openApiDirectRouter
+} from './docs/docs.router';
 import invokeRouter from './invoke/invoke.router';
 import modelRouter from './model/model.router';
 import sqlRouter from './sql/sql.router';
@@ -45,6 +49,7 @@ logged.add(sqlRouter);
 logged.add(invokeRouter);
 // Stats are dashboard-only: intentionally not mounted on /openapi.
 logged.add(statRouter);
+logged.add(openApiAdminRouter);
 adminApi.add(logged);
 
 /** Public health under /api (no auth). */
@@ -53,4 +58,4 @@ publicRoot.get('/health', async () => {
   success({ status: 'ok' });
 });
 
-export default [publicRoot, root, adminApi];
+export default [publicRoot, openApiDirectRouter, root, adminApi];

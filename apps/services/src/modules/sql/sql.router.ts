@@ -27,6 +27,10 @@ router.get('', (ctx) => controller.list(ctx), {
   query: { rules: sqlListQueryRules }
 });
 
+router.get('/{:id}/openapi', (ctx) => controller.openapiDoc(ctx), {
+  params: { rules: sqlIdRules }
+});
+
 router.get('/{:id}', (ctx) => controller.detail(ctx), {
   params: { rules: sqlIdRules }
 });

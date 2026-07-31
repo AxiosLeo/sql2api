@@ -28,6 +28,7 @@ import {
   updateSql,
   type ModelRecord
 } from '../../services/sqlite';
+import { buildSqlSpec } from '../../services/openapi-spec';
 
 function parseColumns(json: string): ColumnDefinition[] {
   try {
@@ -217,6 +218,37 @@ export class SqlController extends BaseController {
       this.error(404, 'Not Found SQL');
     }
     this.success(toSqlItem(record!));
+  }
+
+  /** Self-contained OpenAPI document for a single registered SQL. */
+  async openapiDoc(context: KoaContext) {
+    const appId = this.appId(context);
+    const id = context.params?.id || '';
+    const record = getSql(appId, id);
+    if (!record) {
+      this.error(404, 'Not Found SQL');
+    }
+
+    const koaReq = context.koa?.request as
+      | { origin?: string; protocol?: string; host?: string }
+      | undefined;
+    let serverUrl = 'http://127.0.0.1:13334';
+    if (koaReq?.origin) {
+      serverUrl = koaReq.origin;
+    } else {
+      const host =
+        (typeof context.headers?.host === 'string' && context.headers.host)
+        || koaReq?.host
+        || '127.0.0.1:13334';
+      const protoHeader = context.headers?.['x-forwarded-proto'];
+      const proto =
+        (typeof protoHeader === 'string' && protoHeader.split(',')[0].trim())
+        || koaReq?.protocol
+        || 'http';
+      serverUrl = `${proto}://${host}`;
+    }
+
+    this.success(buildSqlSpec(record!, { serverUrl }));
   }
 
   async update(context: KoaContext) {

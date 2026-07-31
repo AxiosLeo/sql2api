@@ -1,4 +1,5 @@
-import { ChevronsUpDown, LogOut } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { BookText, ChevronsUpDown, LogOut } from 'lucide-react'
 import useDialogState from '@/hooks/use-dialog-state'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -72,6 +73,13 @@ export function NavUser({ user }: NavUserProps) {
                   </div>
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to='/api-docs'>
+                  <BookText />
+                  API Docs
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant='destructive'

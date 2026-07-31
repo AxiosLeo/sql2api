@@ -306,6 +306,58 @@
         }
       }
     },
+    "/openapi/sqls/{id}/openapi": {
+      "get": {
+        "tags": [
+          "Sqls"
+        ],
+        "summary": "获取单条 SQL 的 OpenAPI 文档",
+        "description": "返回自包含的迷你 OpenAPI 3.0 文档（含该 SQL 的 invoke path、参数 schema、共享响应组件），便于复制到 ApiFox 等工具。disabled 的 SQL 也可获取。",
+        "operationId": "getSqlOpenApiDoc",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SqlId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OpenAPI 文档对象（位于响应 envelope 的 data 字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeBase"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "description": "OpenAPI 3.0.3 document",
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/openapi/sqls/{id}": {
       "get": {
         "tags": [

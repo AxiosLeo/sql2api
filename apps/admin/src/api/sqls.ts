@@ -146,3 +146,11 @@ export function reviewSql(body: ReviewSqlBody): Promise<ReviewResult> {
     timeout: 120_000,
   })
 }
+
+/** Self-contained OpenAPI document for a single SQL API. */
+export function getSqlOpenApiDoc(id: string): Promise<Record<string, unknown>> {
+  return apiRequest<Record<string, unknown>>({
+    method: 'GET',
+    url: `/api/sqls/${id}/openapi`,
+  })
+}

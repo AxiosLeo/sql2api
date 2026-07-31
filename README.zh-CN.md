@@ -23,11 +23,11 @@
 sql2api/
 ├── apps/
 │   ├── services/     # HTTP API 后端（@axiosleo/koapp），默认端口 :13334
-│   └── admin/        # React 19 + Vite + shadcn 管理控制台
+│   │                 # openapi-specs/ + openapi-spec.ts → GET /openapi.json
+│   └── admin/        # React 19 + Vite + shadcn 管理控制台（含 API Docs 页）
 ├── packages/
 │   └── commands/     # CLI 命令（app、apikey）
 ├── bin/sql2api.js    # CLI 入口
-├── docs/             # OpenAPI JSON 规范
 ├── scripts/          # 模型下载 + 数据库初始化 SQL
 └── docker-compose.yml
 ```
@@ -176,18 +176,37 @@ curl -sS -X POST \
 |------|------|
 | 连接 | `POST/GET /openapi/connections`、`GET/PATCH/DELETE /openapi/connections/{id}`、`POST …/test` |
 | 模型 | `GET …/connections/{id}/tables`、`POST …/models/generate`、`GET/DELETE /openapi/models/{id}`、`POST …/sync` |
-| SQL | `POST/GET /openapi/sqls`、`POST /generate`、`POST /review`、`GET/PATCH/DELETE /openapi/sqls/{id}` |
+| SQL | `POST/GET /openapi/sqls`、`POST /generate`、`POST /review`、`GET/PATCH/DELETE /openapi/sqls/{id}`、`GET /openapi/sqls/{id}/openapi` |
 | 调用 | `ANY /openapi/invoke/{uuid}` |
+| OpenAPI 文档 | `GET /openapi.json`（Api-Key；裸 JSON，供 ApiFox 定时导入） |
 | 健康检查 | `GET /api/health`（无需鉴权） |
 
-完整 OpenAPI 规范：
+完整 OpenAPI 规范（按模块手写的片段）：
 
-- [`docs/openapi.connection.json`](./docs/openapi.connection.json)
-- [`docs/openapi.model.json`](./docs/openapi.model.json)
-- [`docs/openapi.sql.json`](./docs/openapi.sql.json)
-- [`docs/openapi.invoke.json`](./docs/openapi.invoke.json)
-- [`docs/openapi.admin.json`](./docs/openapi.admin.json)
-- [`docs/openapi.stats.json`](./docs/openapi.stats.json)
+- 对外 Api-Key 面（会合并进 `/openapi.json`）：
+  - [`openapi.connection.json`](./apps/services/src/services/openapi-specs/openapi.connection.json)
+  - [`openapi.model.json`](./apps/services/src/services/openapi-specs/openapi.model.json)
+  - [`openapi.sql.json`](./apps/services/src/services/openapi-specs/openapi.sql.json)
+  - [`openapi.invoke.json`](./apps/services/src/services/openapi-specs/openapi.invoke.json)
+- 控制台参考（Session `/api/*`，**不参与合并**；`/api` 不支持 Api-Key）：
+  - [`openapi.admin.json`](./apps/services/src/services/openapi-specs/openapi.admin.json)
+  - [`openapi.stats.json`](./apps/services/src/services/openapi-specs/openapi.stats.json)
+
+### 合并后的 OpenAPI 单文件
+
+`GET /openapi.json` 返回一份面向 **Api-Key 对外接口** 的 OpenAPI 3.0 JSON：上述四个 `/openapi/*` 模块规范，加上每条 **enabled** 已注册 SQL 的 invoke 接口（参数由该 SQL 的 `params` 规则生成）。控制台 `/api/*`（登录、应用、统计等）使用 Session Cookie，**不接受 Api-Key**，也 **不会** 进入该合并文档。
+
+直链鉴权方式：
+
+```bash
+# 查询参数（方便 ApiFox 定时导入）
+curl 'http://127.0.0.1:13334/openapi.json?api_key=sk2a_...'
+
+# 或 Bearer 头
+curl -H 'Authorization: Bearer sk2a_...' http://127.0.0.1:13334/openapi.json
+```
+
+动态 SQL 接口按 Api-Key 所属应用过滤。管理台另提供 `GET /api/openapi.json`（Session；内容同为对外面）以及 **API Docs** 页面（头像菜单 → API Docs）用于浏览、下载与复制直链。单条 SQL 文档：行菜单 **Copy API Doc**，或 `GET /api/sqls/{id}/openapi`。
 
 ## AI 功能（可选）
 

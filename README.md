@@ -23,11 +23,11 @@ Create an application, add a database connection, register SQL with named parame
 sql2api/
 ├── apps/
 │   ├── services/     # HTTP API backend (@axiosleo/koapp), default :13334
-│   └── admin/        # React 19 + Vite + shadcn Admin Console
+│   │                 # openapi-specs/ + openapi-spec.ts → GET /openapi.json
+│   └── admin/        # React 19 + Vite + shadcn Admin Console (API Docs page)
 ├── packages/
 │   └── commands/     # CLI commands (app, apikey)
 ├── bin/sql2api.js    # CLI entry
-├── docs/             # OpenAPI JSON specs
 ├── scripts/          # Model download + DB seed SQL
 └── docker-compose.yml
 ```
@@ -176,18 +176,37 @@ Key public routes:
 |------|-------|
 | Connections | `POST/GET /openapi/connections`, `GET/PATCH/DELETE /openapi/connections/{id}`, `POST …/test` |
 | Models | `GET …/connections/{id}/tables`, `POST …/models/generate`, `GET/DELETE /openapi/models/{id}`, `POST …/sync` |
-| Sqls | `POST/GET /openapi/sqls`, `POST /generate`, `POST /review`, `GET/PATCH/DELETE /openapi/sqls/{id}` |
+| Sqls | `POST/GET /openapi/sqls`, `POST /generate`, `POST /review`, `GET/PATCH/DELETE /openapi/sqls/{id}`, `GET /openapi/sqls/{id}/openapi` |
 | Invoke | `ANY /openapi/invoke/{uuid}` |
+| OpenAPI document | `GET /openapi.json` (Api-Key; raw JSON for ApiFox timed import) |
 | Health | `GET /api/health` (no auth) |
 
-Full OpenAPI specs:
+Full OpenAPI specs (hand-written module fragments):
 
-- [`docs/openapi.connection.json`](./docs/openapi.connection.json)
-- [`docs/openapi.model.json`](./docs/openapi.model.json)
-- [`docs/openapi.sql.json`](./docs/openapi.sql.json)
-- [`docs/openapi.invoke.json`](./docs/openapi.invoke.json)
-- [`docs/openapi.admin.json`](./docs/openapi.admin.json)
-- [`docs/openapi.stats.json`](./docs/openapi.stats.json)
+- Public surface (merged into `/openapi.json`):
+  - [`openapi.connection.json`](./apps/services/src/services/openapi-specs/openapi.connection.json)
+  - [`openapi.model.json`](./apps/services/src/services/openapi-specs/openapi.model.json)
+  - [`openapi.sql.json`](./apps/services/src/services/openapi-specs/openapi.sql.json)
+  - [`openapi.invoke.json`](./apps/services/src/services/openapi-specs/openapi.invoke.json)
+- Console-only reference (Session `/api/*`, **not** merged; Api-Key cannot access `/api`):
+  - [`openapi.admin.json`](./apps/services/src/services/openapi-specs/openapi.admin.json)
+  - [`openapi.stats.json`](./apps/services/src/services/openapi-specs/openapi.stats.json)
+
+### Merged OpenAPI document
+
+`GET /openapi.json` returns a single OpenAPI 3.0 JSON for the **public Api-Key surface**: the four `/openapi/*` module specs above plus every **enabled** registered SQL invoke endpoint (parameters derived from each SQL’s `params` rules). Console `/api/*` routes (admin login, apps, stats, etc.) use Session cookies, do **not** accept Api-Key, and are **excluded** from this document.
+
+Auth for the direct link:
+
+```bash
+# Query parameter (convenient for ApiFox timed import)
+curl 'http://127.0.0.1:13334/openapi.json?api_key=sk2a_...'
+
+# Or Bearer header
+curl -H 'Authorization: Bearer sk2a_...' http://127.0.0.1:13334/openapi.json
+```
+
+Dynamic SQL paths are scoped to the Api-Key’s app. Admin Console also exposes `GET /api/openapi.json` (session; same public-only content) and an **API Docs** page (avatar menu → API Docs) for browsing, downloading, and copying the direct link. Per-SQL docs: row menu **Copy API Doc** or `GET /api/sqls/{id}/openapi`.
 
 ## AI Features (Optional)
 

@@ -11,7 +11,8 @@ alwaysApply: false
 - 业务模块三件套：`src/modules/<name>/<name>.router.ts`（路由）+ `<name>.controller.ts`（处理器）+ `<name>.model.ts`（validatorjs 校验规则与类型）
 - 路由统一在 `src/modules/index.ts` 挂载，分两套 API 面：
   - `/openapi`：`authMiddleware`（Bearer Api-Key，按 app_id 限定作用域），挂 connection / model / sql / invoke
-  - `/api`：admin 模块（登录/登出/资料）公开挂载，其余模块挂在 `adminAuthMiddleware`（Session）之后；stat 仅挂 admin 面
+  - `/api`：admin 模块（登录/登出/资料）公开挂载，其余模块挂在 `adminAuthMiddleware`（Session）之后；stat / docs（`/api/openapi.json`）仅挂 admin 面
+  - 顶层 `GET /openapi.json`：Api-Key（Bearer 或 `?api_key=`）返回合并后的裸 OpenAPI JSON
 - 路由参数写法 `/{:id}`，校验规则挂路由第三参：`{ params/query/body: { rules } }`
 
 ## Controller
@@ -22,6 +23,6 @@ alwaysApply: false
 
 ## 共享服务与测试
 
-- 共享服务放 `src/services/`：`sqlite.ts`（元数据库）、`datasource.ts`（客户 MySQL/PG）、`ai.ts`（node-llama-cpp）、`retention.ts`（日志清理）
+- 共享服务放 `src/services/`：`sqlite.ts`（元数据库）、`datasource.ts`（客户 MySQL/PG）、`ai.ts`（node-llama-cpp）、`retention.ts`（日志清理）、`openapi-spec.ts`（OpenAPI 合并与动态生成，规范片段在 `openapi-specs/`）
 - 测试与源码同目录，命名 `*.test.ts`，mocha 运行：`pnpm test`；单跑一个文件用 `pnpm test-one <路径>`
 - koapp 框架 API 细节（Router / Controller / Model / 响应）见 `.cursor/skills/koapp*` 技能

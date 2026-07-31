@@ -5,20 +5,20 @@
 ## 目录结构
 
 - `apps/services` — 后端 API 服务（@axiosleo/koapp，默认端口 13334）
-  - `src/modules/` — 业务模块：admin、app、connection、model、sql、invoke、stat
+  - `src/modules/` — 业务模块：admin、app、connection、model、sql、invoke、stat、docs
   - `src/middlewares/` — `auth.ts`（Bearer Api-Key）、`admin-auth.ts`（Session）
-  - `src/services/` — 共享服务：`sqlite.ts`（元数据库）、`datasource.ts`（客户库连接）、`ai.ts`（本地 LLM）、`retention.ts`（日志清理）
+  - `src/services/` — 共享服务：`sqlite.ts`（元数据库）、`datasource.ts`（客户库连接）、`ai.ts`（本地 LLM）、`retention.ts`（日志清理）、`openapi-spec.ts`（OpenAPI 合并与动态生成）、`openapi-specs/`（手写模块规范片段）
 - `apps/admin` — 管理台（React 19 + Vite + TanStack Router/Query + shadcn/ui）
 - `packages/commands` — CLI 命令实现（纯 JS，@axiosleo/cli-tool）：`app.js`、`apikey.js`
 - `bin/sql2api.js` — CLI 入口（`sql2api app` / `sql2api apikey`）
 - `scripts/` — 模型下载脚本、DB seed SQL
-- `docs/` — OpenAPI JSON 规范
 
 ## 关键事实
 
 - 元数据（应用、Api-Key、连接、模型、SQL、日志）存内部 SQLite，默认 `./data/sql2api.db`；客户数据源仅支持 MySQL / PostgreSQL
 - 两套 API 面：`/openapi/*` 用 Bearer Api-Key（`sk2a_…`，明文仅创建时展示一次）；`/api/*` 用 Session cookie（管理台）
 - SQL 调用入口：`/openapi/invoke/{uuid}`；HTTP 方法映射：SELECT→GET、INSERT→POST、UPDATE→PATCH、多语句/CALL→complex(POST)；禁止 DROP/DELETE/TRUNCATE
+- 合并 OpenAPI 直链：`GET /openapi.json`（Bearer 或 `?api_key=`），返回静态模块规范 + 当前应用 enabled SQL 的动态接口；管理台 `GET /api/openapi.json` 与 API Docs 页面；单条 `GET /sqls/{id}/openapi`
 - AI 能力（可选）：node-llama-cpp 加载本地 GGUF 模型，用于 SQL 生成与审查
 - 数据源连接密码用 AES-256-GCM 加密存储
 

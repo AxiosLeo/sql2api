@@ -1022,6 +1022,19 @@ export function listSqls(
   return { list, total, page, size };
 }
 
+/** List all SQL records without pagination (for OpenAPI generation). */
+export function listAllSqls(app_id: string | null): SqlRecord[] {
+  const db = getDB();
+  if (app_id) {
+    return db
+      .prepare('SELECT * FROM sqls WHERE app_id = ? ORDER BY created_at DESC')
+      .all(app_id) as SqlRecord[];
+  }
+  return db
+    .prepare('SELECT * FROM sqls ORDER BY created_at DESC')
+    .all() as SqlRecord[];
+}
+
 export function getSql(app_id: string | null, id: string): SqlRecord | null {
   if (app_id) {
     return (
