@@ -40,6 +40,10 @@ export class BaseController extends Controller {
       return false;
     }
     const code = (err as { code?: string }).code || '';
-    return code.startsWith('SQLITE_CONSTRAINT');
+    if (code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return true;
+    }
+    const message = String((err as { message?: string }).message || '');
+    return /UNIQUE constraint failed/i.test(message);
   }
 }

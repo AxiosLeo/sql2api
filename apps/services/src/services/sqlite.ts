@@ -35,6 +35,45 @@ interface SqliteDatabase {
 }
 
 /**
+ * bun:sqlite requires named-param object keys to include the SQL prefix
+ * (`@id` / `$id` / `:id`). better-sqlite3 accepts bare keys (`id`).
+ * Rewrite bare keys so existing `.run(row)` call sites keep working under Bun.
+ */
+function normalizeBunNamedParams(sql: string, params: unknown[]): unknown[] {
+  if (
+    params.length !== 1 ||
+    params[0] === null ||
+    typeof params[0] !== 'object' ||
+    Array.isArray(params[0])
+  ) {
+    return params;
+  }
+  const obj = params[0] as Record<string, unknown>;
+  const named = sql.match(/[@:$][A-Za-z_][A-Za-z0-9_]*/g);
+  if (!named || named.length === 0) {
+    return params;
+  }
+  const out: Record<string, unknown> = {};
+  for (const full of named) {
+    const bare = full.slice(1);
+    if (Object.prototype.hasOwnProperty.call(obj, full)) {
+      out[full] = obj[full];
+    } else if (Object.prototype.hasOwnProperty.call(obj, bare)) {
+      out[full] = obj[bare];
+    }
+  }
+  return [out];
+}
+
+function wrapBunStatement(sql: string, stmt: SqliteStatement): SqliteStatement {
+  return {
+    run: (...params: unknown[]) => stmt.run(...normalizeBunNamedParams(sql, params)),
+    get: (...params: unknown[]) => stmt.get(...normalizeBunNamedParams(sql, params)),
+    all: (...params: unknown[]) => stmt.all(...normalizeBunNamedParams(sql, params))
+  };
+}
+
+/**
  * Open a SQLite DB with the runtime-appropriate driver.
  * Bun does not support better-sqlite3 (V8 native addon); use bun:sqlite instead.
  */
@@ -51,7 +90,7 @@ function openDatabase(filepath: string): SqliteDatabase {
     };
     const db = new Database(filepath, { create: true });
     return {
-      prepare: (sql) => db.prepare(sql),
+      prepare: (sql) => wrapBunStatement(sql, db.prepare(sql)),
       exec: (sql) => {
         db.exec(sql);
       },
