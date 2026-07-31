@@ -32,7 +32,6 @@ import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
-import { SelectDropdown } from '@/components/select-dropdown'
 import { SqlEditor, type SqlDialect } from '@/components/sql-editor'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
@@ -219,6 +218,9 @@ export function SqlEditorPage({
   useEffect(() => {
     if (loading) return
     if (isEdit && initial) {
+      // Wait for connections so Radix Select has matching options when
+      // form.reset updates connection_id (avoids bubble sync clearing to "").
+      if (connectionsQuery.isLoading) return
       form.reset({
         connection_id: initial.connection_id,
         name: initial.name,
@@ -253,7 +255,7 @@ export function SqlEditorPage({
       setReviewedFor(null)
       setAiMeta(null)
     }
-  }, [loading, isEdit, initial, form])
+  }, [loading, isEdit, initial, form, connectionsQuery.isLoading])
 
   useEffect(() => {
     setSelectedModelIds(new Set())
@@ -850,30 +852,47 @@ export function SqlEditorPage({
                     <FormField
                       control={form.control}
                       name='connection_id'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Connection</FormLabel>
-                          <Select
-                            value={field.value || undefined}
-                            onValueChange={field.onChange}
-                            disabled={connectionsQuery.isLoading}
-                          >
-                            <FormControl>
-                              <SelectTrigger className='w-full'>
-                                <SelectValue placeholder='Select connection' />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {(connectionsQuery.data?.list ?? []).map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  {c.name} ({c.type})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      render={({ field }) => {
+                        const selected = (
+                          connectionsQuery.data?.list ?? []
+                        ).find((c) => c.id === field.value)
+                        const selectedLabel = selected
+                          ? `${selected.name} (${selected.type})`
+                          : undefined
+                        return (
+                          <FormItem>
+                            <FormLabel>Connection</FormLabel>
+                            <Select
+                              value={field.value || undefined}
+                              onValueChange={(value) => {
+                                // Ignore empty clears from Radix native bubble
+                                // when SelectItems are not mounted yet.
+                                if (!value) return
+                                field.onChange(value)
+                              }}
+                              disabled={connectionsQuery.isLoading}
+                            >
+                              <FormControl>
+                                <SelectTrigger className='w-full'>
+                                  <SelectValue placeholder='Select connection'>
+                                    {selectedLabel}
+                                  </SelectValue>
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {(connectionsQuery.data?.list ?? []).map(
+                                  (c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.name} ({c.type})
+                                    </SelectItem>
+                                  )
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )
+                      }}
                     />
 
                     <FormField
@@ -918,23 +937,44 @@ export function SqlEditorPage({
                       <FormField
                         control={form.control}
                         name='status'
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Status</FormLabel>
-                            <SelectDropdown
-                              isControlled
-                              defaultValue={field.value}
-                              onValueChange={field.onChange}
-                              placeholder='Select status'
-                              items={[
-                                { label: 'Enabled', value: 'enabled' },
-                                { label: 'Disabled', value: 'disabled' },
-                                { label: 'Draft', value: 'draft' },
-                              ]}
-                            />
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                        render={({ field }) => {
+                          const statusItems = [
+                            { label: 'Enabled', value: 'enabled' },
+                            { label: 'Disabled', value: 'disabled' },
+                            { label: 'Draft', value: 'draft' },
+                          ] as const
+                          const statusLabel = statusItems.find(
+                            (s) => s.value === field.value
+                          )?.label
+                          return (
+                            <FormItem>
+                              <FormLabel>Status</FormLabel>
+                              <Select
+                                value={field.value || undefined}
+                                onValueChange={(value) => {
+                                  if (!value) return
+                                  field.onChange(value)
+                                }}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className='w-full'>
+                                    <SelectValue placeholder='Select status'>
+                                      {statusLabel}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {statusItems.map((s) => (
+                                    <SelectItem key={s.value} value={s.value}>
+                                      {s.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )
+                        }}
                       />
                     ) : null}
 
