@@ -1,4 +1,5 @@
-import type { Control } from 'react-hook-form'
+import { useState } from 'react'
+import { useFormContext, type Control } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,6 +18,8 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { RuleBuilderDialog } from './rule-builder/rule-builder-dialog'
+import { RuleSummary } from './rule-builder/rule-summary'
 import type { SqlEditorForm } from './types'
 
 type ParamsCardProps = {
@@ -32,6 +35,12 @@ export function ParamsCard({
   onAdd,
   onRemove,
 }: ParamsCardProps) {
+  const { setValue, watch } = useFormContext<SqlEditorForm>()
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const params = watch('params')
+  const editingParam =
+    openIndex !== null ? (params?.[openIndex] ?? null) : null
+
   return (
     <Card>
       <CardHeader className='border-b'>
@@ -63,7 +72,7 @@ export function ParamsCard({
             {fields.map((field, index) => (
               <div
                 key={field.id}
-                className='grid grid-cols-1 gap-2 rounded-md border p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]'
+                className='grid grid-cols-1 gap-2 rounded-md border p-3 sm:grid-cols-[1fr_minmax(0,1.4fr)_1fr_1fr_auto]'
               >
                 <FormField
                   control={control}
@@ -85,7 +94,10 @@ export function ParamsCard({
                     <FormItem>
                       <FormLabel className='text-xs'>Rule</FormLabel>
                       <FormControl>
-                        <Input placeholder='required|integer' {...f} />
+                        <RuleSummary
+                          value={f.value}
+                          onConfigure={() => setOpenIndex(index)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -133,6 +145,22 @@ export function ParamsCard({
           </div>
         )}
       </CardContent>
+
+      <RuleBuilderDialog
+        open={openIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) setOpenIndex(null)
+        }}
+        value={editingParam?.rule ?? ''}
+        paramName={editingParam?.name || undefined}
+        onApply={(rule) => {
+          if (openIndex === null) return
+          setValue(`params.${openIndex}.rule`, rule, {
+            shouldDirty: true,
+            shouldValidate: true,
+          })
+        }}
+      />
     </Card>
   )
 }
