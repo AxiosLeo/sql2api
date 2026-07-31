@@ -273,6 +273,8 @@ pnpm --filter sql2spi-services run start
 
 `better-sqlite3` 与 `node-llama-cpp` 被 external 化，目标机器上仍需可用（或在 Bun 运行时使用内置 `bun:sqlite`）。
 
+`validatorjs` 语言包通过动态 `require()` 加载，Bun 单文件编译无法嵌入；启动时由 `src/polyfills/validatorjs-lang.ts` 静态注册英文消息。请保留该 polyfill，不要依赖 externalize `validatorjs`。
+
 ```bash
 # macOS（arm64）
 cd apps/services

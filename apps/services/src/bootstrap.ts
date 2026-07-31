@@ -1,3 +1,4 @@
+import './polyfills/validatorjs-lang';
 import cluster from 'cluster';
 import { cpus } from 'os';
 import { printer } from '@axiosleo/cli-tool';
