@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import {
+  AlignLeft,
   ArrowLeft,
   Loader2,
   Save,
@@ -72,6 +73,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { formatSql } from '@/lib/format-sql'
 import { AiGeneratePanel } from './ai-generate-panel'
 import { ParamsCard } from './params-card'
 import { ReviewCard } from './review-card'
@@ -207,6 +209,28 @@ export function SqlEditorPage({
 
   const dialect: SqlDialect =
     selectedConnection?.type === 'postgresql' ? 'postgresql' : 'mysql'
+
+  /** Format then write SQL; on failure keep raw and toast. */
+  const applyFormattedSql = (
+    raw: string,
+    opts?: { successToast?: boolean }
+  ) => {
+    try {
+      const formatted = formatSql(raw, dialect)
+      form.setValue('sql', formatted, {
+        shouldValidate: true,
+        shouldDirty: true,
+      })
+      if (opts?.successToast) {
+        toast.success('SQL formatted')
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to format SQL.'
+      toast.error(message)
+      form.setValue('sql', raw, { shouldValidate: true, shouldDirty: true })
+    }
+  }
 
   const modelsQuery = useQuery({
     queryKey: ['models', { connection_id: connectionId, size: 100 }],
@@ -366,7 +390,7 @@ export function SqlEditorPage({
       if (!currentName && result.suggested_name) {
         form.setValue('name', result.suggested_name, { shouldValidate: true, shouldDirty: true })
       }
-      form.setValue('sql', result.sql, { shouldValidate: true, shouldDirty: true })
+      applyFormattedSql(result.sql)
       replace(mapParamsToForm(result.params))
       if (result.selected_tables && result.selected_tables.length > 0) {
         const models = modelsQuery.data?.list ?? []
@@ -514,10 +538,7 @@ export function SqlEditorPage({
       })
     },
     onSuccess: (result) => {
-      form.setValue('sql', result.sql, {
-        shouldValidate: true,
-        shouldDirty: true,
-      })
+      applyFormattedSql(result.sql)
       replace(mapParamsToForm(result.params))
       setAiMeta({
         explanation: result.explanation,
@@ -742,10 +763,29 @@ export function SqlEditorPage({
                       value={sqlTab}
                       onValueChange={(v) => setSqlTab(v as 'write' | 'ai')}
                     >
-                      <TabsList>
-                        <TabsTrigger value='write'>Write SQL</TabsTrigger>
-                        <TabsTrigger value='ai'>Generate with AI</TabsTrigger>
-                      </TabsList>
+                      <div className='flex items-center justify-between gap-2'>
+                        <TabsList>
+                          <TabsTrigger value='write'>Write SQL</TabsTrigger>
+                          <TabsTrigger value='ai'>Generate with AI</TabsTrigger>
+                        </TabsList>
+                        {sqlTab === 'write' ? (
+                          <Button
+                            type='button'
+                            variant='outline'
+                            size='sm'
+                            className='h-8 cursor-pointer'
+                            disabled={!sqlValue.trim()}
+                            onClick={() =>
+                              applyFormattedSql(sqlValue, {
+                                successToast: true,
+                              })
+                            }
+                          >
+                            <AlignLeft />
+                            Format
+                          </Button>
+                        ) : null}
+                      </div>
                       <TabsContent value='write' className='flex flex-col gap-3'>
                         <FormField
                           control={form.control}
