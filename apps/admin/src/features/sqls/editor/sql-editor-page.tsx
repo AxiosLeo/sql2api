@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useNavigate } from '@tanstack/react-router'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -161,6 +161,8 @@ export function SqlEditorPage({
     null
   )
   const [allowLeave, setAllowLeave] = useState(false)
+  // Sync ref so shouldBlockFn sees the flag in the same tick as navigate after Save.
+  const allowLeaveRef = useRef(false)
 
   const connectionsQuery = useQuery({
     queryKey: ['connections', { page: 1, size: 100 }],
@@ -286,7 +288,7 @@ export function SqlEditorPage({
   }, [connectionId])
 
   const blocker = useBlocker({
-    shouldBlockFn: () => isDirty && !allowLeave,
+    shouldBlockFn: () => isDirty && !allowLeaveRef.current,
     withResolver: true,
     enableBeforeUnload: isDirty && !allowLeave,
   })
@@ -329,6 +331,7 @@ export function SqlEditorPage({
             ? 'SQL API updated.'
             : 'SQL API created.'
       )
+      allowLeaveRef.current = true
       setAllowLeave(true)
       form.reset(values)
       void navigate({ to: '/sqls' })
