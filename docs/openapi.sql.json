@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "sql2api Sqls API",
-    "description": "SQL 注册与管理模块：类型判定、AI 审查/生成、CRUD。注册成功后可通过 /openapi/invoke/{id} 调用。所有业务接口需 Bearer Api-Key 鉴权。",
+    "description": "SQL 注册与管理模块：类型判定、静态审计 + AI 审查/生成、CRUD。注册成功后可通过 /openapi/invoke/{id} 调用。禁止 DROP / DELETE / TRUNCATE。多语句或 CALL 归为 complex（POST）。所有业务接口需 Bearer Api-Key 鉴权。",
     "version": "0.0.1"
   },
   "servers": [
@@ -29,7 +29,7 @@
           "Sqls"
         ],
         "summary": "注册 SQL",
-        "description": "解析 SQL 类型并映射 HTTP method（SELECT→GET、INSERT→POST、UPDATE→PATCH、DELETE→DELETE），调用 AI 审查通过后落库。",
+        "description": "解析 SQL 类型并映射 HTTP method（SELECT→GET、INSERT→POST、UPDATE→PATCH、complex→POST）。多语句或 CALL/函数归为 complex。静态审计硬性禁止 DROP/DELETE/TRUNCATE，再经 AI 审查语法与性能；未通过返回 422。",
         "operationId": "createSql",
         "security": [
           {
@@ -174,7 +174,7 @@
                 "select",
                 "insert",
                 "update",
-                "delete"
+                "complex"
               ]
             }
           }
@@ -259,7 +259,7 @@
           "Sqls"
         ],
         "summary": "AI 审查 SQL",
-        "description": "可选传入 connection_id 以加载方言与模型上下文；不落库。",
+        "description": "静态审计（禁止 DROP/DELETE/TRUNCATE）+ AI 审查语法/性能。可选传入 connection_id 以加载方言与模型上下文；不落库。响应额外返回推断的 sql_type 与 method。",
         "operationId": "reviewSql",
         "security": [
           {
@@ -274,7 +274,7 @@
                 "$ref": "#/components/schemas/ReviewSqlBody"
               },
               "example": {
-                "sql": "DELETE FROM users",
+                "sql": "SELECT id, name FROM users WHERE id = :id",
                 "connection_id": "550e8400-e29b-41d4-a716-446655440000"
               }
             }
@@ -620,6 +620,25 @@
             "items": {
               "$ref": "#/components/schemas/ReviewIssue"
             }
+          },
+          "sql_type": {
+            "type": "string",
+            "enum": [
+              "select",
+              "insert",
+              "update",
+              "complex"
+            ],
+            "description": "审查端点返回时附带的推断类型"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PATCH"
+            ],
+            "description": "审查端点返回时附带的推断 HTTP method"
           }
         }
       },
@@ -770,7 +789,7 @@
               "select",
               "insert",
               "update",
-              "delete"
+              "complex"
             ]
           },
           "method": {
@@ -778,8 +797,7 @@
             "enum": [
               "GET",
               "POST",
-              "PATCH",
-              "DELETE"
+              "PATCH"
             ]
           },
           "endpoint": {

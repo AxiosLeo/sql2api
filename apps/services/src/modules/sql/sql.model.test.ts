@@ -1,6 +1,12 @@
 import assert from 'assert';
 import { HttpError } from '@axiosleo/koapp';
-import { detectSqlType, replaceNamedParamsForParse } from './sql.model';
+import { splitSqlStatements } from '../../services/sql-text';
+import {
+  analyzeSql,
+  detectSqlType,
+  replaceNamedParamsForParse,
+  staticAuditSql
+} from './sql.model';
 
 describe('sql.model replaceNamedParamsForParse', () => {
   it('replaces :name with 1', () => {
@@ -25,7 +31,41 @@ describe('sql.model replaceNamedParamsForParse', () => {
   });
 });
 
-describe('sql.model detectSqlType', () => {
+describe('splitSqlStatements', () => {
+  it('splits on top-level semicolons', () => {
+    assert.deepStrictEqual(
+      splitSqlStatements('SELECT 1; INSERT INTO t (a) VALUES (1)'),
+      ['SELECT 1', 'INSERT INTO t (a) VALUES (1)']
+    );
+  });
+
+  it('ignores semicolons inside strings', () => {
+    assert.deepStrictEqual(
+      splitSqlStatements("SELECT 'a;b' AS s; SELECT 2"),
+      ["SELECT 'a;b' AS s", 'SELECT 2']
+    );
+  });
+
+  it('ignores semicolons inside line comments', () => {
+    assert.deepStrictEqual(
+      splitSqlStatements('SELECT 1; -- note; still comment\nSELECT 2'),
+      ['SELECT 1', '-- note; still comment\nSELECT 2']
+    );
+  });
+
+  it('ignores semicolons inside block comments', () => {
+    assert.deepStrictEqual(
+      splitSqlStatements('SELECT 1; /* a; b */ SELECT 2'),
+      ['SELECT 1', '/* a; b */ SELECT 2']
+    );
+  });
+
+  it('filters empty segments', () => {
+    assert.deepStrictEqual(splitSqlStatements('SELECT 1;;;'), ['SELECT 1']);
+  });
+});
+
+describe('sql.model detectSqlType / analyzeSql', () => {
   it('detects SELECT with named params', () => {
     assert.strictEqual(
       detectSqlType('SELECT id, name FROM users WHERE id = :id', 'mysql'),
@@ -53,11 +93,11 @@ describe('sql.model detectSqlType', () => {
     );
   });
 
-  it('detects DELETE with named params', () => {
-    assert.strictEqual(
-      detectSqlType('DELETE FROM users WHERE id = :id', 'mysql'),
-      'delete'
-    );
+  it('classifies DELETE as complex (blocked by static audit)', () => {
+    const analysis = analyzeSql('DELETE FROM users WHERE id = :id', 'mysql');
+    assert.strictEqual(analysis.sql_type, 'complex');
+    assert.strictEqual(analysis.method, 'POST');
+    assert.strictEqual(analysis.statements[0].kind, 'delete');
   });
 
   it('detects SELECT with WITH CTE', () => {
@@ -77,23 +117,97 @@ describe('sql.model detectSqlType', () => {
     );
   });
 
-  it('rejects multiple statements', () => {
-    assert.throws(
-      () => detectSqlType('SELECT 1; SELECT 2', 'mysql'),
-      (err: unknown) =>
-        err instanceof HttpError
-        && err.status === 400
-        && String(err.message).includes('single SQL statement')
+  it('classifies mixed multi-statement as complex/POST', () => {
+    const analysis = analyzeSql(
+      'SELECT id FROM users WHERE id = :id; UPDATE users SET name = :name WHERE id = :id',
+      'mysql'
     );
+    assert.strictEqual(analysis.sql_type, 'complex');
+    assert.strictEqual(analysis.method, 'POST');
+    assert.strictEqual(analysis.statements.length, 2);
   });
 
-  it('rejects unsupported types like DROP', () => {
+  it('classifies same-type multi-statement as complex/POST', () => {
+    const analysis = analyzeSql(
+      'INSERT INTO t (a) VALUES (:a); INSERT INTO t (a) VALUES (:b)',
+      'mysql'
+    );
+    assert.strictEqual(analysis.sql_type, 'complex');
+    assert.strictEqual(analysis.method, 'POST');
+  });
+
+  it('classifies CALL as complex/POST', () => {
+    const analysis = analyzeSql('CALL refresh_stats(:user_id)', 'mysql');
+    assert.strictEqual(analysis.sql_type, 'complex');
+    assert.strictEqual(analysis.method, 'POST');
+  });
+
+  it('throws on empty SQL', () => {
     assert.throws(
-      () => detectSqlType('DROP TABLE users', 'mysql'),
+      () => analyzeSql('   ', 'mysql'),
       (err: unknown) =>
         err instanceof HttpError
         && err.status === 400
-        && String(err.message).includes('Unsupported SQL type')
+        && String(err.message).includes('Unable to detect SQL type')
     );
+  });
+});
+
+describe('sql.model staticAuditSql', () => {
+  it('rejects DELETE', () => {
+    const analysis = analyzeSql('DELETE FROM users WHERE id = :id', 'mysql');
+    const issues = staticAuditSql(analysis);
+    assert.ok(issues.some((i) => i.severity === 'error' && /DELETE/i.test(i.message)));
+  });
+
+  it('rejects DROP', () => {
+    const analysis = analyzeSql('DROP TABLE users', 'mysql');
+    const issues = staticAuditSql(analysis);
+    assert.ok(issues.some((i) => i.severity === 'error' && /DROP/i.test(i.message)));
+  });
+
+  it('rejects TRUNCATE', () => {
+    const analysis = analyzeSql('TRUNCATE TABLE users', 'mysql');
+    const issues = staticAuditSql(analysis);
+    assert.ok(issues.some((i) => i.severity === 'error' && /TRUNCATE/i.test(i.message)));
+  });
+
+  it('rejects DELETE embedded in multi-statement script', () => {
+    const analysis = analyzeSql(
+      'SELECT 1; DELETE FROM users WHERE id = :id',
+      'mysql'
+    );
+    assert.strictEqual(analysis.sql_type, 'complex');
+    const issues = staticAuditSql(analysis);
+    assert.ok(issues.some((i) => i.severity === 'error' && /DELETE/i.test(i.message)));
+  });
+
+  it('rejects DELETE inside CTE main statement', () => {
+    const analysis = analyzeSql(
+      'WITH doomed AS (SELECT id FROM users) DELETE FROM users WHERE id IN (SELECT id FROM doomed)',
+      'mysql'
+    );
+    const issues = staticAuditSql(analysis);
+    assert.ok(issues.some((i) => i.severity === 'error' && /DELETE/i.test(i.message)));
+  });
+
+  it('allows SELECT / INSERT / UPDATE', () => {
+    for (const sql of [
+      'SELECT * FROM users WHERE id = :id',
+      'INSERT INTO users (name) VALUES (:name)',
+      'UPDATE users SET name = :name WHERE id = :id'
+    ]) {
+      const issues = staticAuditSql(analyzeSql(sql, 'mysql'));
+      assert.strictEqual(issues.length, 0, sql);
+    }
+  });
+
+  it('allows complex SELECT+INSERT without forbidden ops', () => {
+    const analysis = analyzeSql(
+      'INSERT INTO logs (msg) VALUES (:msg); SELECT LAST_INSERT_ID() AS id',
+      'mysql'
+    );
+    assert.strictEqual(analysis.sql_type, 'complex');
+    assert.strictEqual(staticAuditSql(analysis).length, 0);
   });
 });

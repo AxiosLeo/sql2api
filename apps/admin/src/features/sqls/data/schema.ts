@@ -4,7 +4,7 @@ export const sqlTypeSchema = z.union([
   z.literal('select'),
   z.literal('insert'),
   z.literal('update'),
-  z.literal('delete'),
+  z.literal('complex'),
 ])
 export type SqlType = z.infer<typeof sqlTypeSchema>
 
@@ -35,6 +35,14 @@ export const reviewIssueSchema = z.object({
 export const reviewResultSchema = z.object({
   passed: z.boolean(),
   issues: z.array(reviewIssueSchema),
+  sql_type: sqlTypeSchema.optional(),
+  method: z
+    .union([
+      z.literal('GET'),
+      z.literal('POST'),
+      z.literal('PATCH'),
+    ])
+    .optional(),
 })
 
 export const sqlSchema = z.object({
@@ -49,7 +57,6 @@ export const sqlSchema = z.object({
     z.literal('GET'),
     z.literal('POST'),
     z.literal('PATCH'),
-    z.literal('DELETE'),
   ]),
   endpoint: z.string(),
   params: z.array(sqlParamSchema),

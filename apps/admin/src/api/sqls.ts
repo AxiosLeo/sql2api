@@ -1,7 +1,7 @@
 import { apiRequest } from '@/lib/api-client'
 
-export type SqlType = 'select' | 'insert' | 'update' | 'delete'
-export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
+export type SqlType = 'select' | 'insert' | 'update' | 'complex'
+export type HttpMethod = 'GET' | 'POST' | 'PATCH'
 export type SqlStatus = 'enabled' | 'disabled'
 export type ReviewSeverity = 'error' | 'warning' | 'info'
 
@@ -21,6 +21,8 @@ export interface ReviewIssue {
 export interface ReviewResult {
   passed: boolean
   issues: ReviewIssue[]
+  sql_type?: SqlType
+  method?: HttpMethod
 }
 
 export interface SqlItem {

@@ -30,7 +30,10 @@ const typeClass = new Map<string, string>([
     'update',
     'bg-amber-100/50 text-amber-900 dark:text-amber-200 border-amber-300',
   ],
-  ['delete', 'bg-red-100/50 text-red-900 dark:text-red-200 border-red-300'],
+  [
+    'complex',
+    'bg-violet-100/50 text-violet-900 dark:text-violet-200 border-violet-300',
+  ],
 ])
 
 export type SqlsColumnsOptions = {

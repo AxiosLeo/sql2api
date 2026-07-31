@@ -131,8 +131,8 @@ CREATE TABLE IF NOT EXISTS sqls (
   name TEXT NOT NULL,
   description TEXT DEFAULT '',
   sql_text TEXT NOT NULL,
-  sql_type TEXT NOT NULL CHECK(sql_type IN ('select', 'insert', 'update', 'delete')),
-  method TEXT NOT NULL CHECK(method IN ('GET', 'POST', 'PATCH', 'DELETE')),
+  sql_type TEXT NOT NULL CHECK(sql_type IN ('select', 'insert', 'update', 'complex')),
+  method TEXT NOT NULL CHECK(method IN ('GET', 'POST', 'PATCH')),
   params_json TEXT NOT NULL DEFAULT '[]',
   status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled')),
   review_json TEXT NOT NULL DEFAULT '{}',
@@ -453,6 +453,7 @@ export function getDB(): SqliteDatabase {
   db.pragma('foreign_keys = ON');
   db.exec(SQLITE_DDL);
   migrateInvokeLogsParams(db);
+  migrateSqlsTypeCheck(db);
 
   dbInstance = db;
   dbPathResolved = resolved;
@@ -466,6 +467,73 @@ function migrateInvokeLogsParams(db: SqliteDatabase): void {
   }>;
   if (!columns.some((col) => col.name === 'params')) {
     db.exec('ALTER TABLE invoke_logs ADD COLUMN params TEXT');
+  }
+}
+
+/**
+ * Rebuild `sqls` when the CHECK constraint predates the `complex` sql_type.
+ * SQLite cannot ALTER CHECK constraints in place.
+ */
+function migrateSqlsTypeCheck(db: SqliteDatabase): void {
+  const row = db
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sqls'"
+    )
+    .get() as { sql?: string } | undefined;
+  if (!row?.sql) {
+    return;
+  }
+  if (row.sql.includes("'complex'") && !row.sql.includes("'delete'")) {
+    return;
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec('BEGIN');
+    db.exec(`
+CREATE TABLE sqls_new (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  sql_text TEXT NOT NULL,
+  sql_type TEXT NOT NULL CHECK(sql_type IN ('select', 'insert', 'update', 'complex')),
+  method TEXT NOT NULL CHECK(method IN ('GET', 'POST', 'PATCH')),
+  params_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled')),
+  review_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE,
+  FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE CASCADE,
+  UNIQUE(app_id, name)
+);
+INSERT INTO sqls_new (
+  id, app_id, connection_id, name, description, sql_text,
+  sql_type, method, params_json, status, review_json, created_at, updated_at
+)
+SELECT
+  id, app_id, connection_id, name, description, sql_text,
+  CASE WHEN sql_type = 'delete' THEN 'complex' ELSE sql_type END,
+  CASE WHEN method = 'DELETE' THEN 'POST' ELSE method END,
+  params_json, status, review_json, created_at, updated_at
+FROM sqls;
+DROP TABLE sqls;
+ALTER TABLE sqls_new RENAME TO sqls;
+CREATE INDEX IF NOT EXISTS idx_sqls_app_id ON sqls(app_id);
+CREATE INDEX IF NOT EXISTS idx_sqls_connection_id ON sqls(connection_id);
+`);
+    db.exec('COMMIT');
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
+    throw err;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
   }
 }
 

@@ -1,6 +1,6 @@
 export type DatasourceType = 'mysql' | 'postgresql';
 
-export type SqlType = 'select' | 'insert' | 'update' | 'delete';
+export type SqlType = 'select' | 'insert' | 'update' | 'complex';
 
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
@@ -64,5 +64,5 @@ export const SQL_TYPE_TO_METHOD: Record<SqlType, HttpMethod> = {
   select: 'GET',
   insert: 'POST',
   update: 'PATCH',
-  delete: 'DELETE'
+  complex: 'POST'
 };

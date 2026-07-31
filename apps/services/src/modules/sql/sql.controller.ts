@@ -9,7 +9,12 @@ import type {
   SqlListQuery,
   UpdateSqlBody
 } from './sql.model';
-import { detectSqlType, sqlTypeToMethod, toSqlItem } from './sql.model';
+import {
+  analyzeSql,
+  mergeReviewResults,
+  staticAuditSql,
+  toSqlItem
+} from './sql.model';
 import type { ColumnDefinition, PaginatedResult, ReviewResult } from '../../types';
 import type { ModelContext } from '../../services/ai';
 import { generateSQL, reviewSQL } from '../../services/ai';
@@ -61,19 +66,40 @@ export class SqlController extends BaseController {
       this.error(404, 'Not Found Connection');
     }
 
-    const sqlType = detectSqlType(body.sql, conn!.type);
-    const method = sqlTypeToMethod(sqlType);
-    const models = this.loadModelContexts(conn!.app_id, body.connection_id);
+    const analysis = analyzeSql(body.sql, conn!.type);
+    const staticIssues = staticAuditSql(analysis);
+    if (staticIssues.some((i) => i.severity === 'error')) {
+      this.failed(
+        {
+          passed: false,
+          issues: staticIssues,
+          sql_type: analysis.sql_type,
+          method: analysis.method
+        },
+        '422;SQL Review Failed',
+        422
+      );
+    }
 
-    const review = await reviewSQL({
+    const models = this.loadModelContexts(conn!.app_id, body.connection_id);
+    const aiReview = await reviewSQL({
       sql: body.sql,
       connection_id: body.connection_id,
       dialect: conn!.type,
       models
     });
+    const review = mergeReviewResults(staticIssues, aiReview);
 
     if (!review.passed) {
-      this.failed(review, '422;SQL Review Failed', 422);
+      this.failed(
+        {
+          ...review,
+          sql_type: analysis.sql_type,
+          method: analysis.method
+        },
+        '422;SQL Review Failed',
+        422
+      );
     }
 
     try {
@@ -83,8 +109,8 @@ export class SqlController extends BaseController {
         name: body.name,
         description: body.description || '',
         sql_text: body.sql,
-        sql_type: sqlType,
-        method,
+        sql_type: analysis.sql_type,
+        method: analysis.method,
         params: body.params || [],
         review
       });
@@ -139,13 +165,25 @@ export class SqlController extends BaseController {
       models = this.loadModelContexts(appId, body.connection_id);
     }
 
-    const result: ReviewResult = await reviewSQL({
-      sql: body.sql,
-      connection_id: body.connection_id,
-      dialect,
-      models
+    const analysis = analyzeSql(body.sql, dialect);
+    const staticIssues = staticAuditSql(analysis);
+
+    let aiReview: ReviewResult = { passed: true, issues: [] };
+    if (!staticIssues.some((i) => i.severity === 'error')) {
+      aiReview = await reviewSQL({
+        sql: body.sql,
+        connection_id: body.connection_id,
+        dialect,
+        models
+      });
+    }
+
+    const result = mergeReviewResults(staticIssues, aiReview);
+    this.success({
+      ...result,
+      sql_type: analysis.sql_type,
+      method: analysis.method
     });
-    this.success(result);
   }
 
   async list(context: KoaContext) {
@@ -209,17 +247,42 @@ export class SqlController extends BaseController {
     let review: ReviewResult | undefined;
 
     if (body.sql !== undefined && body.sql !== existing!.sql_text) {
-      sqlType = detectSqlType(body.sql, conn!.type);
-      method = sqlTypeToMethod(sqlType);
+      const analysis = analyzeSql(body.sql, conn!.type);
+      sqlType = analysis.sql_type;
+      method = analysis.method;
+
+      const staticIssues = staticAuditSql(analysis);
+      if (staticIssues.some((i) => i.severity === 'error')) {
+        this.failed(
+          {
+            passed: false,
+            issues: staticIssues,
+            sql_type: analysis.sql_type,
+            method: analysis.method
+          },
+          '422;SQL Review Failed',
+          422
+        );
+      }
+
       const models = this.loadModelContexts(appId, connectionId);
-      review = await reviewSQL({
+      const aiReview = await reviewSQL({
         sql: body.sql,
         connection_id: connectionId,
         dialect: conn!.type,
         models
       });
+      review = mergeReviewResults(staticIssues, aiReview);
       if (!review.passed) {
-        this.failed(review, '422;SQL Review Failed', 422);
+        this.failed(
+          {
+            ...review,
+            sql_type: analysis.sql_type,
+            method: analysis.method
+          },
+          '422;SQL Review Failed',
+          422
+        );
       }
     }
 

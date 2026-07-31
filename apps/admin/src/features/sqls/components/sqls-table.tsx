@@ -36,7 +36,7 @@ type SqlsTableProps = {
   navigate: NavigateFn
 }
 
-const SQL_TYPES: SqlType[] = ['select', 'insert', 'update', 'delete']
+const SQL_TYPES: SqlType[] = ['select', 'insert', 'update', 'complex']
 
 export function SqlsTable({ search, navigate }: SqlsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])

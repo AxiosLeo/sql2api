@@ -76,7 +76,7 @@ const GENERATE_SCHEMA = {
     sql: { type: 'string' },
     sql_type: {
       type: 'string',
-      enum: ['select', 'insert', 'update', 'delete']
+      enum: ['select', 'insert', 'update', 'complex']
     },
     params: {
       type: 'array',
@@ -236,8 +236,15 @@ export async function reviewSQL(input: ReviewSQLInput): Promise<ReviewResult> {
       'You are a senior SQL security and quality reviewer.',
       'Review the given SQL for safety, correctness, and best practices.',
       'Return ONLY JSON matching the schema.',
-      'Set passed=false if there are any severity=error issues (SQL injection risk, destructive ops without WHERE, syntax errors, etc.).',
-      'Warnings/info alone may still allow passed=true.'
+      'HARD RULES (always severity=error and passed=false):',
+      '- DELETE statements are forbidden.',
+      '- DROP statements are forbidden.',
+      '- TRUNCATE statements are forbidden.',
+      'Also flag as error: clear SQL injection risks, destructive ops without WHERE, and syntax errors for the given dialect.',
+      'Performance checks (warning unless severe): SELECT *, missing LIMIT on large tables, UPDATE without WHERE,',
+      'non-sargable predicates (functions on indexed columns), missing index opportunities given the schema context.',
+      'When the script has multiple statements, review each statement.',
+      'Warnings/info alone may still allow passed=true; any severity=error must set passed=false.'
     ].join(' ');
 
     const userPrompt = [
@@ -280,6 +287,8 @@ export async function generateSQL(input: GenerateSQLInput): Promise<AIGenerateRe
       `Generate a single ${dialect} SQL statement from the user request.`,
       'Use named placeholders like :param_name (not ? or $1).',
       'Include validatorjs-style rules for each param (e.g. required|integer).',
+      'NEVER generate DELETE, DROP, or TRUNCATE statements.',
+      'Prefer SELECT / INSERT / UPDATE. For multi-step logic use sql_type=complex.',
       'Return ONLY JSON matching the schema.'
     ].join(' ');
 
@@ -299,7 +308,7 @@ export async function generateSQL(input: GenerateSQLInput): Promise<AIGenerateRe
       explanation: string;
     }>(systemPrompt, userPrompt, GENERATE_SCHEMA);
 
-    const sqlType = (['select', 'insert', 'update', 'delete'].includes(result.sql_type)
+    const sqlType = (['select', 'insert', 'update', 'complex'].includes(result.sql_type)
       ? result.sql_type
       : 'select') as SqlType;
 

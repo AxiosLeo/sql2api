@@ -5,7 +5,7 @@ import { BaseController } from '../controller';
 import { toSqlItem } from '../sql/sql.model';
 import type { HttpMethod, SqlParamDef } from '../../types';
 import { getConnectionConfig, getSql, insertInvokeLog, type SqlRecord } from '../../services/sqlite';
-import { execute, query } from '../../services/datasource';
+import { execute, executeScript, query } from '../../services/datasource';
 
 export interface InvokeSelectResult {
   rows: Record<string, unknown>[];
@@ -15,6 +15,13 @@ export interface InvokeSelectResult {
 export interface InvokeWriteResult {
   affected_rows: number;
   insert_id?: number;
+}
+
+export interface InvokeComplexResult {
+  results: Array<
+    | { kind: 'query'; rows: Record<string, unknown>[]; row_count: number }
+    | { kind: 'execute'; affected_rows: number; insert_id?: number }
+  >;
 }
 
 const METHOD_PARAM_SOURCE: Record<HttpMethod, 'query' | 'body'> = {
@@ -34,6 +41,21 @@ function extractRowCount(data: unknown): number | null {
   }
   if (typeof payload.affected_rows === 'number') {
     return payload.affected_rows;
+  }
+  if (Array.isArray(payload.results)) {
+    let total = 0;
+    for (const item of payload.results) {
+      if (!item || typeof item !== 'object') {
+        continue;
+      }
+      const row = item as Record<string, unknown>;
+      if (typeof row.row_count === 'number') {
+        total += row.row_count;
+      } else if (typeof row.affected_rows === 'number') {
+        total += row.affected_rows;
+      }
+    }
+    return total;
   }
   return null;
 }
@@ -132,6 +154,12 @@ export class InvokeController extends BaseController {
           rows: result.rows,
           row_count: result.row_count
         };
+        this.success(payload);
+      }
+
+      if (sql.sql_type === 'complex') {
+        const script = await executeScript(config!, record!.sql_text, data);
+        const payload: InvokeComplexResult = { results: script.results };
         this.success(payload);
       }
 

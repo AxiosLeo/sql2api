@@ -8,11 +8,11 @@
 
 ## 功能特性
 
-- **SQL → HTTP API** — 注册一次 SQL，通过 Bearer Api-Key 调用。方法映射：`SELECT` → `GET`、`INSERT` → `POST`、`UPDATE` → `PATCH`、`DELETE` → `DELETE`
+- **SQL → HTTP API** — 注册一次 SQL，通过 Bearer Api-Key 调用。方法映射：`SELECT` → `GET`、`INSERT` → `POST`、`UPDATE` → `PATCH`、多语句 / `CALL` → `complex`（`POST`）。静态审计禁止 `DROP` / `DELETE` / `TRUNCATE`
 - **应用与 Api-Key 管理** — 多租户应用，密钥格式 `sk2a_…`（明文仅在创建时展示一次）
 - **连接管理** — 支持 MySQL / PostgreSQL；密码使用 AES-256-GCM 加密存储
 - **模型元数据** — 同步表/字段信息，供 AI 上下文与文档使用
-- **AI 辅助 SQL**（可选）— 通过 `node-llama-cpp` 加载本地 GGUF 模型，支持生成与审查
+- **AI 辅助 SQL**（可选）— 通过 `node-llama-cpp` 加载本地 GGUF 模型，支持生成与审查（语法、性能与安全）
 - **调用日志** — 请求历史记录，支持按保留天数自动清理
 - **Admin Console** — React 管理后台：应用、连接、模型、SQL API、调用日志
 - **CLI** — `sql2api app` / `sql2api apikey`，便于脚本化运维

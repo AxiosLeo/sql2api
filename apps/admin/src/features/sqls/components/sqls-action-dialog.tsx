@@ -88,7 +88,7 @@ function ReviewIssuesPanel({ review }: { review: ReviewResult | null }) {
           : 'border-destructive/40 bg-destructive/5'
       )}
     >
-      <div className='flex items-center gap-2'>
+      <div className='flex flex-wrap items-center gap-2'>
         <Badge
           variant='outline'
           className={cn(
@@ -99,10 +99,24 @@ function ReviewIssuesPanel({ review }: { review: ReviewResult | null }) {
         >
           {review.passed ? 'Review passed' : 'Review failed'}
         </Badge>
+        {review.sql_type ? (
+          <Badge variant='outline' className='capitalize'>
+            {review.sql_type}
+          </Badge>
+        ) : null}
+        {review.method ? (
+          <Badge variant='secondary'>{review.method}</Badge>
+        ) : null}
         <span className='text-xs text-muted-foreground'>
           {review.issues.length} issue(s)
         </span>
       </div>
+      {review.sql_type === 'complex' ? (
+        <p className='text-sm text-muted-foreground'>
+          Multi-statement or mixed operations will be registered as a Complex
+          API (POST), executed in a single transaction.
+        </p>
+      ) : null}
       {review.issues.length > 0 && (
         <ul className='space-y-2'>
           {review.issues.map((issue, idx) => (
@@ -133,11 +147,22 @@ function extractReviewResult(err: unknown): ReviewResult | null {
   const status = err.response?.status
   if (status !== 422) return null
   const data = err.response?.data as
-    | { data?: ReviewResult; passed?: boolean; issues?: ReviewResult['issues'] }
+    | {
+        data?: ReviewResult
+        passed?: boolean
+        issues?: ReviewResult['issues']
+        sql_type?: ReviewResult['sql_type']
+        method?: ReviewResult['method']
+      }
     | undefined
   if (!data) return null
   if (typeof data.passed === 'boolean' && Array.isArray(data.issues)) {
-    return { passed: data.passed, issues: data.issues }
+    return {
+      passed: data.passed,
+      issues: data.issues,
+      sql_type: data.sql_type,
+      method: data.method,
+    }
   }
   if (
     data.data &&

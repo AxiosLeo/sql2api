@@ -8,11 +8,11 @@ Create an application, add a database connection, register SQL with named parame
 
 ## Features
 
-- **SQL → HTTP API** — Register SQL once, invoke it with Bearer Api-Key auth. Method mapping: `SELECT` → `GET`, `INSERT` → `POST`, `UPDATE` → `PATCH`, `DELETE` → `DELETE`
+- **SQL → HTTP API** — Register SQL once, invoke it with Bearer Api-Key auth. Method mapping: `SELECT` → `GET`, `INSERT` → `POST`, `UPDATE` → `PATCH`, multi-statement / `CALL` → `complex` (`POST`). `DROP` / `DELETE` / `TRUNCATE` are blocked by static audit
 - **App & Api-Key management** — Multi-tenant apps with `sk2a_…` keys (plaintext shown only once on create)
 - **Connections** — MySQL and PostgreSQL datasources; passwords stored with AES-256-GCM
 - **Models** — Sync table/column metadata for AI context and documentation
-- **AI-assisted SQL** (optional) — Local GGUF models via `node-llama-cpp` for generate and review
+- **AI-assisted SQL** (optional) — Local GGUF models via `node-llama-cpp` for generate and review (syntax, performance, and safety)
 - **Invocation logs** — Request history with configurable retention purge
 - **Admin Console** — React dashboard for apps, connections, models, SQL APIs, and logs
 - **CLI** — `sql2api app` / `sql2api apikey` for scripting and ops

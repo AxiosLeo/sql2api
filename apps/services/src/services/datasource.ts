@@ -6,6 +6,7 @@ import type {
   DatasourceType,
   TableInfo
 } from '../types';
+import { splitSqlStatements } from './sql-text';
 
 export interface DatasourceConfig {
   type: DatasourceType;
@@ -454,5 +455,120 @@ export async function execute(
     return {
       affected_rows: result.rowCount ?? 0
     };
+  });
+}
+
+export type ScriptStatementResult =
+  | { kind: 'query'; rows: Record<string, unknown>[]; row_count: number }
+  | { kind: 'execute'; affected_rows: number; insert_id?: number };
+
+export interface ScriptResult {
+  results: ScriptStatementResult[];
+}
+
+function looksLikeQuery(sql: string): boolean {
+  let cleaned = sql.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  cleaned = cleaned.replace(/--[^\n]*/g, ' ');
+  cleaned = cleaned.replace(/#[^\n]*/g, ' ');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+  if (/^WITH\b/i.test(cleaned)) {
+    // CTE — treat as query unless a write verb appears at depth 0
+    let depth = 0;
+    for (let i = 0; i < cleaned.length; i += 1) {
+      const ch = cleaned[i];
+      if (ch === '(') {
+        depth += 1;
+        continue;
+      }
+      if (ch === ')') {
+        depth = Math.max(0, depth - 1);
+        continue;
+      }
+      if (depth === 0) {
+        const slice = cleaned.slice(i);
+        if (/^(INSERT|UPDATE|DELETE|CALL|DO|EXECUTE|EXEC)\b/i.test(slice)) {
+          return false;
+        }
+        if (/^SELECT\b/i.test(slice)) {
+          return true;
+        }
+      }
+    }
+    return true;
+  }
+
+  return /^(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i.test(cleaned);
+}
+
+/**
+ * Execute a multi-statement SQL script inside a single transaction.
+ * Any statement failure rolls back the whole script.
+ * Returns per-statement results (query rows or write affected_rows).
+ */
+export async function executeScript(
+  config: DatasourceConfig,
+  sql: string,
+  params: Record<string, unknown> = {}
+): Promise<ScriptResult> {
+  const statements = splitSqlStatements(sql);
+  if (statements.length === 0) {
+    throw new HttpError(400, 'Empty SQL script');
+  }
+
+  if (config.type === 'mysql') {
+    return withMysql(config, async (conn) => {
+      await conn.beginTransaction();
+      try {
+        const results: ScriptStatementResult[] = [];
+        for (const stmt of statements) {
+          const [raw] = await conn.query(stmt, params as never);
+          if (looksLikeQuery(stmt) && Array.isArray(raw)) {
+            const rows = raw as Record<string, unknown>[];
+            results.push({ kind: 'query', rows, row_count: rows.length });
+          } else {
+            const header = raw as mysql.ResultSetHeader;
+            results.push({
+              kind: 'execute',
+              affected_rows: header.affectedRows || 0,
+              insert_id: header.insertId || undefined
+            });
+          }
+        }
+        await conn.commit();
+        return { results };
+      } catch (err) {
+        await conn.rollback().catch(() => undefined);
+        throw err;
+      }
+    });
+  }
+
+  return withPg(config, async (client) => {
+    await client.query('BEGIN');
+    try {
+      const results: ScriptStatementResult[] = [];
+      for (const stmt of statements) {
+        const { text, values } = convertNamedParams(stmt, params);
+        const result = await client.query(text, values);
+        if (looksLikeQuery(stmt) && Array.isArray(result.rows)) {
+          results.push({
+            kind: 'query',
+            rows: result.rows as Record<string, unknown>[],
+            row_count: result.rowCount ?? result.rows.length
+          });
+        } else {
+          results.push({
+            kind: 'execute',
+            affected_rows: result.rowCount ?? 0
+          });
+        }
+      }
+      await client.query('COMMIT');
+      return { results };
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    }
   });
 }
