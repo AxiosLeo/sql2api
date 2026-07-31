@@ -38,7 +38,7 @@ const formSchema = z.object({
   type: z.enum(['mysql', 'postgresql']),
   host: z.string().min(1, 'Host is required.'),
   port: z.coerce
-    .number({ invalid_type_error: 'Port must be a number.' })
+    .number()
     .int('Port must be an integer.')
     .min(1, 'Port must be between 1 and 65535.')
     .max(65535, 'Port must be between 1 and 65535.'),
@@ -71,7 +71,8 @@ export function ConnectionsActionDialog({
   })
 
   const form = useForm<ConnectionForm>({
-    resolver: zodResolver(formSchema),
+    // zod v4 coerce.number input typing conflicts with RHF Resolver generics
+    resolver: zodResolver(formSchema) as never,
     defaultValues: {
       app_id: '',
       name: '',

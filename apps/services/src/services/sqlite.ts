@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import Database from 'better-sqlite3';
 import config from '../config';
 import type {
   DatasourceType,
@@ -15,6 +14,59 @@ import type {
   ColumnDefinition
 } from '../types';
 import type { DatasourceConfig } from './datasource';
+
+/** Minimal sync SQLite surface shared by better-sqlite3 (Node) and bun:sqlite (Bun). */
+interface SqliteRunResult {
+  changes: number;
+  lastInsertRowid: number | bigint;
+}
+
+interface SqliteStatement {
+  run(...params: unknown[]): SqliteRunResult;
+  get(...params: unknown[]): unknown;
+  all(...params: unknown[]): unknown[];
+}
+
+interface SqliteDatabase {
+  prepare(sql: string): SqliteStatement;
+  exec(sql: string): void;
+  pragma(key: string): unknown;
+  close(): void;
+}
+
+/**
+ * Open a SQLite DB with the runtime-appropriate driver.
+ * Bun does not support better-sqlite3 (V8 native addon); use bun:sqlite instead.
+ */
+function openDatabase(filepath: string): SqliteDatabase {
+  if (typeof (globalThis as { Bun?: unknown }).Bun !== 'undefined') {
+    // Dynamic require keeps Node/tsc builds free of bun:sqlite types.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Database } = require('bun:sqlite') as {
+      Database: new (filename: string, options?: { create?: boolean }) => {
+        prepare(sql: string): SqliteStatement;
+        exec(sql: string): void;
+        close(): void;
+      };
+    };
+    const db = new Database(filepath, { create: true });
+    return {
+      prepare: (sql) => db.prepare(sql),
+      exec: (sql) => {
+        db.exec(sql);
+      },
+      pragma: (key) => {
+        db.exec(`PRAGMA ${key}`);
+        return undefined;
+      },
+      close: () => db.close()
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const BetterSqlite3 = require('better-sqlite3') as new (filename: string) => SqliteDatabase;
+  return new BetterSqlite3(filepath);
+}
 
 /**
  * SQLite DDL for the sql2api business database.
@@ -213,6 +265,8 @@ export interface ListInvokeLogsOptions {
   size?: number;
   sql_id?: string;
   success?: boolean;
+  start?: string;
+  end?: string;
 }
 
 /** Invoke log row joined with the SQL's current name (null if the SQL was deleted). */
@@ -315,7 +369,7 @@ export interface ListOptions {
   sql_type?: SqlType;
 }
 
-let dbInstance: Database.Database | null = null;
+let dbInstance: SqliteDatabase | null = null;
 let dbPathResolved: string | null = null;
 
 function nowISO(): string {
@@ -383,7 +437,7 @@ function hashToken(token: string): string {
  * Open (or create) the SQLite database and run DDL migrations.
  * Singleton per process; path resolved from SQLITE_PATH / config.
  */
-export function getDB(): Database.Database {
+export function getDB(): SqliteDatabase {
   const resolved = resolveDbPath();
   if (dbInstance && dbPathResolved === resolved) {
     return dbInstance;
@@ -394,7 +448,7 @@ export function getDB(): Database.Database {
   }
 
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
-  const db = new Database(resolved);
+  const db = openDatabase(resolved);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SQLITE_DDL);
@@ -406,7 +460,7 @@ export function getDB(): Database.Database {
 }
 
 /** Add `params` column to existing invoke_logs tables created before this field existed. */
-function migrateInvokeLogsParams(db: Database.Database): void {
+function migrateInvokeLogsParams(db: SqliteDatabase): void {
   const columns = db.prepare('PRAGMA table_info(invoke_logs)').all() as Array<{
     name: string;
   }>;
@@ -1056,6 +1110,14 @@ export function listInvokeLogs(
   if (options.success !== undefined) {
     where += ' AND l.success = ?';
     params.push(options.success ? 1 : 0);
+  }
+  if (options.start) {
+    where += ' AND l.created_at >= ?';
+    params.push(options.start);
+  }
+  if (options.end) {
+    where += ' AND l.created_at <= ?';
+    params.push(options.end);
   }
 
   const db = getDB();

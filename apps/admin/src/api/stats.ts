@@ -65,6 +65,8 @@ export interface StatsLogsQuery {
   sql_id?: string
   success?: 'true' | 'false'
   app_id?: string
+  start?: string
+  end?: string
 }
 
 export function fetchStatsOverview(): Promise<StatsOverview> {

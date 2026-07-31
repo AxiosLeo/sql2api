@@ -43,6 +43,8 @@ export interface StatsLogsQuery extends PaginationQuery {
   sql_id?: string;
   success?: string | boolean | number;
   app_id?: string;
+  start?: string;
+  end?: string;
 }
 
 export type { InvokeDailyStat, InvokeStatsResult };
@@ -113,7 +115,9 @@ export const statsLogsQueryRules = {
   ...paginationRules,
   sql_id: 'string',
   success: 'string',
-  app_id: 'string'
+  app_id: 'string',
+  start: 'string',
+  end: 'string'
 };
 
 export const statsLogIdRules = {

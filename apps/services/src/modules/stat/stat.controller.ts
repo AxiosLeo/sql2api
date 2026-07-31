@@ -62,11 +62,33 @@ export class StatController extends BaseController {
       : undefined;
     const success = parseSuccessFilter(query.success);
 
+    let start: string | undefined;
+    let end: string | undefined;
+    if (typeof query.start === 'string' && query.start) {
+      const parsed = new Date(query.start);
+      if (Number.isNaN(parsed.getTime())) {
+        this.error(400, 'Invalid start time');
+      }
+      start = parsed.toISOString();
+    }
+    if (typeof query.end === 'string' && query.end) {
+      const parsed = new Date(query.end);
+      if (Number.isNaN(parsed.getTime())) {
+        this.error(400, 'Invalid end time');
+      }
+      end = parsed.toISOString();
+    }
+    if (start && end && end < start) {
+      this.error(400, 'End time must be after start time');
+    }
+
     const result = listInvokeLogs(appId, {
       page: Number.isFinite(page) ? page : 1,
       size: Number.isFinite(size) ? size : 20,
       sql_id: sqlId,
-      success
+      success,
+      start,
+      end
     });
 
     const payload: PaginatedResult<InvokeLogItem> = {
