@@ -316,6 +316,8 @@ export interface ListInvokeLogsOptions {
   success?: boolean;
   start?: string;
   end?: string;
+  latency_min?: number;
+  latency_max?: number;
 }
 
 /** Invoke log row joined with the SQL's current name (null if the SQL was deleted). */
@@ -1378,6 +1380,14 @@ export function listInvokeLogs(
   if (options.end) {
     where += ' AND l.created_at <= ?';
     params.push(options.end);
+  }
+  if (options.latency_min !== undefined) {
+    where += ' AND l.latency_ms >= ?';
+    params.push(options.latency_min);
+  }
+  if (options.latency_max !== undefined) {
+    where += ' AND l.latency_ms <= ?';
+    params.push(options.latency_max);
   }
 
   const db = getDB();

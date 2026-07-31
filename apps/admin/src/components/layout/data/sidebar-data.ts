@@ -52,16 +52,16 @@ export const sidebarData: SidebarData = {
           url: '/sqls',
           icon: FileCode2,
         },
-        {
-          title: 'Invocation Logs',
-          url: '/logs',
-          icon: ScrollText,
-        },
       ],
     },
     {
       title: 'System',
       items: [
+        {
+          title: 'Invocation Logs',
+          url: '/logs',
+          icon: ScrollText,
+        },
         {
           title: 'Settings',
           url: '/system',

@@ -82,13 +82,39 @@ export class StatController extends BaseController {
       this.error(400, 'End time must be after start time');
     }
 
+    let latencyMin: number | undefined;
+    let latencyMax: number | undefined;
+    if (query.latency_min !== undefined && query.latency_min !== '') {
+      const parsed = Number(query.latency_min);
+      if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+        this.error(400, 'Invalid latency_min');
+      }
+      latencyMin = parsed;
+    }
+    if (query.latency_max !== undefined && query.latency_max !== '') {
+      const parsed = Number(query.latency_max);
+      if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+        this.error(400, 'Invalid latency_max');
+      }
+      latencyMax = parsed;
+    }
+    if (
+      latencyMin !== undefined &&
+      latencyMax !== undefined &&
+      latencyMax < latencyMin
+    ) {
+      this.error(400, 'Latency max must be >= min');
+    }
+
     const result = listInvokeLogs(appId, {
       page: Number.isFinite(page) ? page : 1,
       size: Number.isFinite(size) ? size : 20,
       sql_id: sqlId,
       success,
       start,
-      end
+      end,
+      latency_min: latencyMin,
+      latency_max: latencyMax
     });
 
     const payload: PaginatedResult<InvokeLogItem> = {

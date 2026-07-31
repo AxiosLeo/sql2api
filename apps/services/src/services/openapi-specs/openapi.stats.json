@@ -157,6 +157,26 @@
             "required": false,
             "schema": { "type": "string", "format": "uuid" },
             "description": "按应用过滤"
+          },
+          {
+            "name": "latency_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "按延迟下限过滤（毫秒，含）"
+          },
+          {
+            "name": "latency_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "按延迟上限过滤（毫秒，含）"
           }
         ],
         "responses": {

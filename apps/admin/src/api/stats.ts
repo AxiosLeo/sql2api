@@ -67,6 +67,8 @@ export interface StatsLogsQuery {
   app_id?: string
   start?: string
   end?: string
+  latency_min?: number
+  latency_max?: number
 }
 
 export function fetchStatsOverview(): Promise<StatsOverview> {

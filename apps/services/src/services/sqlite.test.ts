@@ -497,6 +497,20 @@ INSERT INTO sqls VALUES (
     assert.strictEqual(failedOnly.total, 1);
     assert.strictEqual(failedOnly.list[0].status_code, 405);
 
+    const slowOnly = listInvokeLogs(app.id, { latency_min: 40 });
+    assert.strictEqual(slowOnly.total, 1);
+    assert.strictEqual(slowOnly.list[0].latency_ms, 40);
+
+    const fastOnly = listInvokeLogs(app.id, { latency_max: 10 });
+    assert.strictEqual(fastOnly.total, 1);
+    assert.strictEqual(fastOnly.list[0].latency_ms, 5);
+
+    const rangeOnly = listInvokeLogs(app.id, {
+      latency_min: 5,
+      latency_max: 40
+    });
+    assert.strictEqual(rangeOnly.total, 2);
+
     const stats = getInvokeStats(app.id, { days: 30, sql_id: sql.id });
     assert.strictEqual(stats.total, 2);
     assert.strictEqual(stats.success, 1);

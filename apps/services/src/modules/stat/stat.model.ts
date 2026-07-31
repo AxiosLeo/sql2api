@@ -45,6 +45,8 @@ export interface StatsLogsQuery extends PaginationQuery {
   app_id?: string;
   start?: string;
   end?: string;
+  latency_min?: string | number;
+  latency_max?: string | number;
 }
 
 export type { InvokeDailyStat, InvokeStatsResult };
@@ -117,7 +119,9 @@ export const statsLogsQueryRules = {
   success: 'string',
   app_id: 'string',
   start: 'string',
-  end: 'string'
+  end: 'string',
+  latency_min: 'integer|min:0',
+  latency_max: 'integer|min:0'
 };
 
 export const statsLogIdRules = {
