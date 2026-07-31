@@ -17,9 +17,9 @@
 
 - 元数据（应用、Api-Key、连接、模型、SQL、日志）存内部 SQLite，默认 `./data/sql2api.db`；客户数据源仅支持 MySQL / PostgreSQL
 - 两套 API 面：`/openapi/*` 用 Bearer Api-Key（`sk2a_…`，明文仅创建时展示一次）；`/api/*` 用 Session cookie（管理台）
-- SQL 调用入口：`/openapi/invoke/{uuid}`；HTTP 方法映射：SELECT→GET、INSERT→POST、UPDATE→PATCH、多语句/CALL→complex(POST)；禁止 DROP/DELETE/TRUNCATE
+- SQL 调用入口：`/openapi/invoke/{uuid}`；HTTP 方法映射：SELECT→GET、INSERT→POST、UPDATE→PATCH、多语句/CALL→complex(POST)；禁止 DROP/DELETE/TRUNCATE；`draft` / `disabled` 状态不可 invoke，仅 `enabled` 可调用且会出现在合并 OpenAPI 中
 - 合并 OpenAPI 直链：`GET /openapi.json`（Bearer 或 `?api_key=`），返回静态模块规范 + 当前应用 enabled SQL 的动态接口；管理台 `GET /api/openapi.json` 与 API Docs 页面；单条 `GET /sqls/{id}/openapi`
-- AI 能力（可选）：node-llama-cpp 加载本地 GGUF 模型，用于 SQL 生成与审查
+- AI 能力（可选）：支持本地 GGUF（node-llama-cpp，`LLAMA_MODEL_PATH`）或私有 Ollama（`AI_PROVIDER=ollama` + `OLLAMA_*`）；Admin「System Settings」可在线覆盖环境变量，未配置时回退 env
 - 数据源连接密码用 AES-256-GCM 加密存储
 
 ## 常用命令

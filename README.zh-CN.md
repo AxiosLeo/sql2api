@@ -96,8 +96,14 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change-me   # 必须非空，否则无法登录管理后台
 # APP_SECRET=sql2api-dev-secret-change-me
 # SQLITE_PATH=./data/sql2api.db
-# LLAMA_MODEL_PATH=          # 留空则禁用 AI
+# LLAMA_MODEL_PATH=          # 留空则禁用本地 AI
+# AI_PROVIDER=local          # 或 ollama
+# OLLAMA_BASE_URL=http://127.0.0.1:11434
+# OLLAMA_MODEL=gpt-oss:20b
+# OLLAMA_TIMEOUT_MS=120000
 ```
+
+管理台 **System Settings** 可在运行时覆盖上述配置（存入 SQLite）。
 
 ### 4. 启动
 
@@ -126,7 +132,13 @@ pnpm --filter sql2api-admin run dev
 | `ADMIN_PASSWORD` | _(空)_ | 管理后台密码；**为空则禁用登录** |
 | `SQLITE_PATH` | `./data/sql2api.db` | 元数据存储路径 |
 | `INVOKE_LOG_RETENTION_DAYS` | `30` | 调用日志保留天数 |
-| `LLAMA_MODEL_PATH` | _(空)_ | GGUF 模型路径；为空则禁用 AI 功能 |
+| `AI_PROVIDER` | `local` | AI 后端：`local`（GGUF）或 `ollama` |
+| `LLAMA_MODEL_PATH` | _(空)_ | `local` 提供者使用的 GGUF 路径；为空则禁用本地 AI |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama HTTP 基址（`AI_PROVIDER=ollama` 时） |
+| `OLLAMA_MODEL` | `gpt-oss:20b` | Ollama 模型名 |
+| `OLLAMA_TIMEOUT_MS` | `120000` | Ollama 请求超时（毫秒） |
+
+在线覆盖：管理台 **System Settings** 将 provider / Ollama 选项存入 SQLite，优先级高于环境变量（Reset 可清除在线配置）。
 
 Admin Vite 环境变量（`apps/admin/.env.example`）：
 

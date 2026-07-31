@@ -96,9 +96,14 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change-me   # must be non-empty to enable admin login
 # APP_SECRET=sql2api-dev-secret-change-me
 # SQLITE_PATH=./data/sql2api.db
-# LLAMA_MODEL_PATH=          # leave empty to disable AI
+# LLAMA_MODEL_PATH=          # leave empty to disable local AI
+# AI_PROVIDER=local          # or ollama
+# OLLAMA_BASE_URL=http://127.0.0.1:11434
+# OLLAMA_MODEL=gpt-oss:20b
+# OLLAMA_TIMEOUT_MS=120000
 ```
 
+Admin Console → **System Settings** can override these at runtime (stored in SQLite).
 ### 4. Run
 
 ```bash
@@ -126,7 +131,13 @@ Environment variables used by `apps/services` (`src/config.ts`):
 | `ADMIN_PASSWORD` | _(empty)_ | Admin password; **empty disables login** |
 | `SQLITE_PATH` | `./data/sql2api.db` | Meta store path |
 | `INVOKE_LOG_RETENTION_DAYS` | `30` | Days to keep invoke logs before purge |
-| `LLAMA_MODEL_PATH` | _(empty)_ | Path to GGUF model; empty disables AI features |
+| `AI_PROVIDER` | `local` | AI backend: `local` (GGUF) or `ollama` |
+| `LLAMA_MODEL_PATH` | _(empty)_ | Path to GGUF model for `local` provider; empty disables local AI |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama HTTP base URL (when `AI_PROVIDER=ollama`) |
+| `OLLAMA_MODEL` | `gpt-oss:20b` | Ollama model name |
+| `OLLAMA_TIMEOUT_MS` | `120000` | Ollama request timeout in milliseconds |
+
+Online overrides: Admin Console → **System Settings** stores provider/Ollama options in SQLite and takes precedence over env vars (Reset clears online config).
 
 Admin Vite env (`apps/admin/.env.example`):
 
