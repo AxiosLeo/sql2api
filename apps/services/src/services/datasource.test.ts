@@ -1,6 +1,34 @@
 import assert from 'assert';
 import { HttpError } from '@axiosleo/koapp';
-import { convertNamedParams } from './datasource';
+import { adapters, convertNamedParams } from './datasource';
+import { DATASOURCE_TYPES, datasourceProtocol } from '../types';
+
+describe('datasource adapters registry', () => {
+  it('registers an adapter for every DatasourceType', () => {
+    for (const type of DATASOURCE_TYPES) {
+      assert.ok(adapters[type], `missing adapter for ${type}`);
+      assert.strictEqual(typeof adapters[type].testConnection, 'function');
+      assert.strictEqual(typeof adapters[type].listTables, 'function');
+      assert.strictEqual(typeof adapters[type].describeTables, 'function');
+      assert.strictEqual(typeof adapters[type].query, 'function');
+      assert.strictEqual(typeof adapters[type].execute, 'function');
+      assert.strictEqual(typeof adapters[type].executeScript, 'function');
+    }
+  });
+
+  it('shares protocol adapters within each protocol family', () => {
+    assert.strictEqual(adapters.mysql, adapters.tidb);
+    assert.strictEqual(adapters.mysql, adapters.mariadb);
+    assert.strictEqual(adapters.postgresql, adapters.cockroachdb);
+    assert.strictEqual(adapters.postgresql, adapters.opengauss);
+    assert.notStrictEqual(adapters.mysql, adapters.postgresql);
+  });
+
+  it('protocol helper matches adapter family', () => {
+    assert.strictEqual(datasourceProtocol('doris'), 'mysql');
+    assert.strictEqual(datasourceProtocol('yugabytedb'), 'postgresql');
+  });
+});
 
 describe('datasource convertNamedParams', () => {
   it('converts single named param', () => {

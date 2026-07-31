@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DATASOURCE_TYPES } from '@/lib/datasource'
 
 export const connectionStatusSchema = z.union([
   z.literal('active'),
@@ -6,10 +7,7 @@ export const connectionStatusSchema = z.union([
 ])
 export type ConnectionStatus = z.infer<typeof connectionStatusSchema>
 
-export const datasourceTypeSchema = z.union([
-  z.literal('mysql'),
-  z.literal('postgresql'),
-])
+export const datasourceTypeSchema = z.enum(DATASOURCE_TYPES)
 export type DatasourceType = z.infer<typeof datasourceTypeSchema>
 
 export const connectionSchema = z.object({

@@ -1,5 +1,5 @@
 import type { DatasourceType, EntityStatus } from '../../types';
-import { paginationRules } from '../../types';
+import { DATASOURCE_TYPE_IN_RULE, paginationRules } from '../../types';
 import type { ConnectionRecord } from '../../services/sqlite';
 
 export interface ConnectionItem {
@@ -54,7 +54,7 @@ export interface TestConnectionResult {
 
 export const createConnectionRules = {
   name: 'required|string|max:64',
-  type: 'required|in:mysql,postgresql',
+  type: `required|in:${DATASOURCE_TYPE_IN_RULE}`,
   host: 'required|string',
   port: 'required|integer|min:1|max:65535',
   username: 'required|string',
@@ -65,7 +65,7 @@ export const createConnectionRules = {
 
 export const updateConnectionRules = {
   name: 'string|max:64',
-  type: 'in:mysql,postgresql',
+  type: `in:${DATASOURCE_TYPE_IN_RULE}`,
   host: 'string',
   port: 'integer|min:1|max:65535',
   username: 'string',

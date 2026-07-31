@@ -10,10 +10,14 @@ import type {
   SqlParamDef,
   SqlType
 } from '../types';
-import { SQL_TYPE_TO_METHOD } from '../types';
+import { DATASOURCE_LABELS, SQL_TYPE_TO_METHOD } from '../types';
 import { analyzeSql, staticAuditSql } from '../modules/sql/sql.model';
 import { decryptPassword, getSettingJSON } from './sqlite';
 import { extractNamedParams, reconcileSqlParams, slugifyApiName } from './sql-text';
+
+function dialectLabel(dialect: DatasourceType): string {
+  return DATASOURCE_LABELS[dialect] || dialect;
+}
 
 export type AIProvider = 'local' | 'ollama';
 
@@ -663,8 +667,9 @@ export async function reviewSQL(input: ReviewSQLInput): Promise<ReviewResult> {
       'PLATFORM CONVENTION: named placeholders like :param_name are this platform\'s',
       'parameter syntax. At invoke time each :name is bound as a prepared-statement',
       'parameter with a validated value (never string-interpolated).',
-      ':name placeholders are ALWAYS valid for every supported dialect (MySQL and',
-      'PostgreSQL). NEVER report them as syntax errors, unsupported named parameters,',
+      ':name placeholders are ALWAYS valid for every supported dialect',
+      '(MySQL-compatible and PostgreSQL-compatible engines). NEVER report them as',
+      'syntax errors, unsupported named parameters,',
       'or SQL injection risks. NEVER suggest replacing them with ? or $1 or @vars.',
       'HARD RULES (always severity=error and passed=false):',
       '- DELETE statements are forbidden.',
@@ -680,7 +685,7 @@ export async function reviewSQL(input: ReviewSQLInput): Promise<ReviewResult> {
     const declared =
       paramNames.length > 0 ? paramNames.join(', ') : '(none)';
     const userPrompt = [
-      `Dialect: ${dialect}`,
+      `Dialect: ${dialectLabel(dialect)}`,
       'Schema context:',
       formatModelsContext(input.models),
       '',
@@ -715,7 +720,7 @@ export async function reviewSQL(input: ReviewSQLInput): Promise<ReviewResult> {
 function buildGenerateSystemPrompt(dialect: DatasourceType): string {
   return [
     'You are a senior SQL engineer.',
-    `Generate a single ${dialect} SQL statement from the user request.`,
+    `Generate a single ${dialectLabel(dialect)} SQL statement from the user request.`,
     'Use named placeholders like :param_name (not ? or $1).',
     'Variable values from the user request (year, month, id, name, dates, etc.) MUST use :name placeholders — NEVER hardcode literals.',
     'Include validatorjs-style rules for each param (e.g. required|integer).',
@@ -750,7 +755,7 @@ export async function planGeneration(input: {
   ].join(' ');
 
   const userPrompt = [
-    `Dialect: ${dialect}`,
+    `Dialect: ${dialectLabel(dialect)}`,
     'Available tables:',
     formatCatalogContext(input.models),
     '',
@@ -799,7 +804,7 @@ export async function generateSQL(input: GenerateSQLInput): Promise<AIGenerateRe
   try {
     const dialect = input.dialect || 'mysql';
     const userPrompt = [
-      `Dialect: ${dialect}`,
+      `Dialect: ${dialectLabel(dialect)}`,
       'Schema context:',
       formatModelsContext(input.models),
       '',
@@ -838,7 +843,7 @@ async function repairSQL(input: {
   ].join(' ');
 
   const userPrompt = [
-    `Dialect: ${input.dialect}`,
+    `Dialect: ${dialectLabel(input.dialect)}`,
     'Schema context:',
     formatModelsContext(input.models),
     '',

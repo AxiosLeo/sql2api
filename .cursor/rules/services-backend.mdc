@@ -23,6 +23,6 @@ alwaysApply: false
 
 ## 共享服务与测试
 
-- 共享服务放 `src/services/`：`sqlite.ts`（元数据库）、`datasource.ts`（客户 MySQL/PG）、`ai.ts`（node-llama-cpp）、`retention.ts`（日志清理）、`openapi-spec.ts`（OpenAPI 合并与动态生成，规范片段在 `openapi-specs/`）
+- 共享服务放 `src/services/`：`sqlite.ts`（元数据库）、`datasource.ts`（客户 MySQL/PG 协议族）、`ai.ts`（node-llama-cpp）、`retention.ts`（日志清理）、`openapi-spec.ts`（OpenAPI 合并与动态生成，规范片段在 `openapi-specs/`）
 - 测试与源码同目录，命名 `*.test.ts`，mocha 运行：`pnpm test`；单跑一个文件用 `pnpm test-one <路径>`
 - koapp 框架 API 细节（Router / Controller / Model / 响应）见 `.cursor/skills/koapp*` 技能

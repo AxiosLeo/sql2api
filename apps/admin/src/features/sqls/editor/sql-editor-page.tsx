@@ -73,6 +73,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { datasourceProtocol } from '@/lib/datasource'
 import { formatSql } from '@/lib/format-sql'
 import { AiGeneratePanel } from './ai-generate-panel'
 import { ParamsCard } from './params-card'
@@ -209,8 +210,7 @@ export function SqlEditorPage({
     [connectionsQuery.data?.list, connectionId]
   )
 
-  const dialect: SqlDialect =
-    selectedConnection?.type === 'postgresql' ? 'postgresql' : 'mysql'
+  const dialect: SqlDialect = datasourceProtocol(selectedConnection?.type)
 
   /** Format then write SQL; on failure keep raw and toast. */
   const applyFormattedSql = (

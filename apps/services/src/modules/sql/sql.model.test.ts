@@ -6,9 +6,68 @@ import {
   detectSqlType,
   extractTableNames,
   mergeReviewResults,
+  parserDatabase,
   replaceNamedParamsForParse,
   staticAuditSql
 } from './sql.model';
+import {
+  DATASOURCE_PROTOCOLS,
+  DATASOURCE_TYPES,
+  datasourceProtocol
+} from '../../types';
+
+describe('datasource protocol mapping', () => {
+  it('maps every DatasourceType to mysql or postgresql protocol', () => {
+    for (const type of DATASOURCE_TYPES) {
+      const protocol = datasourceProtocol(type);
+      assert.ok(protocol === 'mysql' || protocol === 'postgresql');
+      assert.strictEqual(DATASOURCE_PROTOCOLS[type], protocol);
+    }
+  });
+
+  it('maps MySQL-family types to mysql protocol', () => {
+    for (const type of [
+      'mysql',
+      'mariadb',
+      'tidb',
+      'oceanbase',
+      'doris',
+      'starrocks'
+    ] as const) {
+      assert.strictEqual(datasourceProtocol(type), 'mysql');
+    }
+  });
+
+  it('maps PostgreSQL-family types to postgresql protocol', () => {
+    for (const type of [
+      'postgresql',
+      'cockroachdb',
+      'yugabytedb',
+      'opengauss',
+      'kingbase'
+    ] as const) {
+      assert.strictEqual(datasourceProtocol(type), 'postgresql');
+    }
+  });
+});
+
+describe('parserDatabase', () => {
+  it('uses MariaDB parser dialect for mariadb', () => {
+    assert.strictEqual(parserDatabase('mariadb'), 'MariaDB');
+  });
+
+  it('uses MySQL parser dialect for other MySQL-protocol types', () => {
+    assert.strictEqual(parserDatabase('mysql'), 'MySQL');
+    assert.strictEqual(parserDatabase('tidb'), 'MySQL');
+    assert.strictEqual(parserDatabase('doris'), 'MySQL');
+  });
+
+  it('uses PostgresQL parser dialect for PG-protocol types', () => {
+    assert.strictEqual(parserDatabase('postgresql'), 'PostgresQL');
+    assert.strictEqual(parserDatabase('cockroachdb'), 'PostgresQL');
+    assert.strictEqual(parserDatabase('kingbase'), 'PostgresQL');
+  });
+});
 
 describe('sql.model replaceNamedParamsForParse', () => {
   it('replaces :name with 1', () => {
@@ -93,6 +152,36 @@ describe('sql.model detectSqlType / analyzeSql', () => {
       ),
       'update'
     );
+  });
+
+  it('detects SELECT for TiDB dialect', () => {
+    assert.strictEqual(
+      detectSqlType('SELECT id FROM users WHERE id = :id', 'tidb'),
+      'select'
+    );
+  });
+
+  it('detects SELECT for MariaDB dialect', () => {
+    assert.strictEqual(
+      detectSqlType('SELECT id FROM users WHERE id = :id', 'mariadb'),
+      'select'
+    );
+  });
+
+  it('detects SELECT for CockroachDB dialect', () => {
+    assert.strictEqual(
+      detectSqlType('SELECT id FROM users WHERE id = :id', 'cockroachdb'),
+      'select'
+    );
+  });
+
+  it('analyzes INSERT for openGauss dialect', () => {
+    const analysis = analyzeSql(
+      'INSERT INTO users (name) VALUES (:name)',
+      'opengauss'
+    );
+    assert.strictEqual(analysis.sql_type, 'insert');
+    assert.strictEqual(analysis.method, 'POST');
   });
 
   it('classifies DELETE as complex (blocked by static audit)', () => {

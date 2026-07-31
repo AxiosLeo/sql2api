@@ -6,6 +6,7 @@ import type {
   DatasourceType,
   TableInfo
 } from '../types';
+import { DATASOURCE_TYPES, datasourceProtocol } from '../types';
 import { splitSqlStatements } from './sql-text';
 
 export interface DatasourceConfig {
@@ -31,6 +32,42 @@ export interface QueryResult {
 export interface ExecuteResult {
   affected_rows: number;
   insert_id?: number;
+}
+
+export type ScriptStatementResult =
+  | { kind: 'query'; rows: Record<string, unknown>[]; row_count: number }
+  | { kind: 'execute'; affected_rows: number; insert_id?: number };
+
+export interface ScriptResult {
+  results: ScriptStatementResult[];
+}
+
+/**
+ * Per-datasource driver surface. Protocol-compatible types share a base
+ * adapter; individual types may override methods later via the registry.
+ */
+export interface DatasourceAdapter {
+  testConnection(config: DatasourceConfig): Promise<TestConnectionResult>;
+  listTables(config: DatasourceConfig): Promise<TableInfo[]>;
+  describeTables(
+    config: DatasourceConfig,
+    tables: string[]
+  ): Promise<Record<string, { comment: string; columns: ColumnDefinition[] }>>;
+  query(
+    config: DatasourceConfig,
+    sql: string,
+    params?: Record<string, unknown>
+  ): Promise<QueryResult>;
+  execute(
+    config: DatasourceConfig,
+    sql: string,
+    params?: Record<string, unknown>
+  ): Promise<ExecuteResult>;
+  executeScript(
+    config: DatasourceConfig,
+    sql: string,
+    params?: Record<string, unknown>
+  ): Promise<ScriptResult>;
 }
 
 const CONNECT_TIMEOUT_MS = 5000;
@@ -181,37 +218,6 @@ async function withPg<T>(
   }
 }
 
-/**
- * Test connectivity to a target MySQL / PostgreSQL datasource.
- * Failures return ok:false instead of throwing.
- */
-export async function testConnection(config: DatasourceConfig): Promise<TestConnectionResult> {
-  const started = Date.now();
-  try {
-    if (config.type === 'mysql') {
-      await withMysql(config, async (conn) => {
-        await conn.query('SELECT 1');
-      });
-    } else {
-      await withPg(config, async (client) => {
-        await client.query('SELECT 1');
-      });
-    }
-    return {
-      ok: true,
-      message: 'Connected',
-      latency_ms: Date.now() - started
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return {
-      ok: false,
-      message,
-      latency_ms: Date.now() - started
-    };
-  }
-}
-
 async function listTablesMysql(config: DatasourceConfig): Promise<TableInfo[]> {
   return withMysql(config, async (conn) => {
     const [rows] = await conn.query(
@@ -244,16 +250,6 @@ async function listTablesPg(config: DatasourceConfig): Promise<TableInfo[]> {
       comment: (r.comment as string) || ''
     }));
   });
-}
-
-/**
- * List tables in the target database.
- */
-export async function listTables(config: DatasourceConfig): Promise<TableInfo[]> {
-  if (config.type === 'mysql') {
-    return listTablesMysql(config);
-  }
-  return listTablesPg(config);
 }
 
 async function describeTablesMysql(
@@ -390,82 +386,6 @@ async function describeTablesPg(
   });
 }
 
-/**
- * Describe columns for one or more tables.
- */
-export async function describeTables(
-  config: DatasourceConfig,
-  tables: string[]
-): Promise<Record<string, { comment: string; columns: ColumnDefinition[] }>> {
-  if (config.type === 'mysql') {
-    return describeTablesMysql(config, tables);
-  }
-  return describeTablesPg(config, tables);
-}
-
-/**
- * Execute a SELECT statement with named `:param` placeholders.
- */
-export async function query(
-  config: DatasourceConfig,
-  sql: string,
-  params: Record<string, unknown> = {}
-): Promise<QueryResult> {
-  if (config.type === 'mysql') {
-    return withMysql(config, async (conn) => {
-      // namedPlaceholders: true — values is a name→value map
-      const [rows] = await conn.query(sql, params as never);
-      const list = rows as Record<string, unknown>[];
-      return { rows: list, row_count: list.length };
-    });
-  }
-
-  const { text, values } = convertNamedParams(sql, params);
-  return withPg(config, async (client) => {
-    const result = await client.query(text, values);
-    return {
-      rows: result.rows as Record<string, unknown>[],
-      row_count: result.rowCount ?? result.rows.length
-    };
-  });
-}
-
-/**
- * Execute an INSERT / UPDATE / DELETE statement with named `:param` placeholders.
- */
-export async function execute(
-  config: DatasourceConfig,
-  sql: string,
-  params: Record<string, unknown> = {}
-): Promise<ExecuteResult> {
-  if (config.type === 'mysql') {
-    return withMysql(config, async (conn) => {
-      const [result] = await conn.execute(sql, params as never);
-      const header = result as mysql.ResultSetHeader;
-      return {
-        affected_rows: header.affectedRows || 0,
-        insert_id: header.insertId || undefined
-      };
-    });
-  }
-
-  const { text, values } = convertNamedParams(sql, params);
-  return withPg(config, async (client) => {
-    const result = await client.query(text, values);
-    return {
-      affected_rows: result.rowCount ?? 0
-    };
-  });
-}
-
-export type ScriptStatementResult =
-  | { kind: 'query'; rows: Record<string, unknown>[]; row_count: number }
-  | { kind: 'execute'; affected_rows: number; insert_id?: number };
-
-export interface ScriptResult {
-  results: ScriptStatementResult[];
-}
-
 function looksLikeQuery(sql: string): boolean {
   let cleaned = sql.replace(/\/\*[\s\S]*?\*\//g, ' ');
   cleaned = cleaned.replace(/--[^\n]*/g, ' ');
@@ -501,22 +421,57 @@ function looksLikeQuery(sql: string): boolean {
   return /^(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i.test(cleaned);
 }
 
-/**
- * Execute a multi-statement SQL script inside a single transaction.
- * Any statement failure rolls back the whole script.
- * Returns per-statement results (query rows or write affected_rows).
- */
-export async function executeScript(
-  config: DatasourceConfig,
-  sql: string,
-  params: Record<string, unknown> = {}
-): Promise<ScriptResult> {
-  const statements = splitSqlStatements(sql);
-  if (statements.length === 0) {
-    throw new HttpError(400, 'Empty SQL script');
-  }
+const mysqlAdapter: DatasourceAdapter = {
+  async testConnection(config) {
+    const started = Date.now();
+    try {
+      await withMysql(config, async (conn) => {
+        await conn.query('SELECT 1');
+      });
+      return {
+        ok: true,
+        message: 'Connected',
+        latency_ms: Date.now() - started
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        message,
+        latency_ms: Date.now() - started
+      };
+    }
+  },
 
-  if (config.type === 'mysql') {
+  listTables: listTablesMysql,
+  describeTables: describeTablesMysql,
+
+  async query(config, sql, params = {}) {
+    return withMysql(config, async (conn) => {
+      // namedPlaceholders: true — values is a name→value map
+      const [rows] = await conn.query(sql, params as never);
+      const list = rows as Record<string, unknown>[];
+      return { rows: list, row_count: list.length };
+    });
+  },
+
+  async execute(config, sql, params = {}) {
+    return withMysql(config, async (conn) => {
+      const [result] = await conn.execute(sql, params as never);
+      const header = result as mysql.ResultSetHeader;
+      return {
+        affected_rows: header.affectedRows || 0,
+        insert_id: header.insertId || undefined
+      };
+    });
+  },
+
+  async executeScript(config, sql, params = {}) {
+    const statements = splitSqlStatements(sql);
+    if (statements.length === 0) {
+      throw new HttpError(400, 'Empty SQL script');
+    }
+
     return withMysql(config, async (conn) => {
       await conn.beginTransaction();
       try {
@@ -543,32 +498,167 @@ export async function executeScript(
       }
     });
   }
+};
 
-  return withPg(config, async (client) => {
-    await client.query('BEGIN');
+const pgAdapter: DatasourceAdapter = {
+  async testConnection(config) {
+    const started = Date.now();
     try {
-      const results: ScriptStatementResult[] = [];
-      for (const stmt of statements) {
-        const { text, values } = convertNamedParams(stmt, params);
-        const result = await client.query(text, values);
-        if (looksLikeQuery(stmt) && Array.isArray(result.rows)) {
-          results.push({
-            kind: 'query',
-            rows: result.rows as Record<string, unknown>[],
-            row_count: result.rowCount ?? result.rows.length
-          });
-        } else {
-          results.push({
-            kind: 'execute',
-            affected_rows: result.rowCount ?? 0
-          });
-        }
-      }
-      await client.query('COMMIT');
-      return { results };
+      await withPg(config, async (client) => {
+        await client.query('SELECT 1');
+      });
+      return {
+        ok: true,
+        message: 'Connected',
+        latency_ms: Date.now() - started
+      };
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        message,
+        latency_ms: Date.now() - started
+      };
     }
-  });
+  },
+
+  listTables: listTablesPg,
+  describeTables: describeTablesPg,
+
+  async query(config, sql, params = {}) {
+    const { text, values } = convertNamedParams(sql, params);
+    return withPg(config, async (client) => {
+      const result = await client.query(text, values);
+      return {
+        rows: result.rows as Record<string, unknown>[],
+        row_count: result.rowCount ?? result.rows.length
+      };
+    });
+  },
+
+  async execute(config, sql, params = {}) {
+    const { text, values } = convertNamedParams(sql, params);
+    return withPg(config, async (client) => {
+      const result = await client.query(text, values);
+      return {
+        affected_rows: result.rowCount ?? 0
+      };
+    });
+  },
+
+  async executeScript(config, sql, params = {}) {
+    const statements = splitSqlStatements(sql);
+    if (statements.length === 0) {
+      throw new HttpError(400, 'Empty SQL script');
+    }
+
+    return withPg(config, async (client) => {
+      await client.query('BEGIN');
+      try {
+        const results: ScriptStatementResult[] = [];
+        for (const stmt of statements) {
+          const { text, values } = convertNamedParams(stmt, params);
+          const result = await client.query(text, values);
+          if (looksLikeQuery(stmt) && Array.isArray(result.rows)) {
+            results.push({
+              kind: 'query',
+              rows: result.rows as Record<string, unknown>[],
+              row_count: result.rowCount ?? result.rows.length
+            });
+          } else {
+            results.push({
+              kind: 'execute',
+              affected_rows: result.rowCount ?? 0
+            });
+          }
+        }
+        await client.query('COMMIT');
+        return { results };
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    });
+  }
+};
+
+/**
+ * Adapter registry keyed by DatasourceType.
+ * Protocol-compatible types share the base adapter; override per type with
+ * `{ ...mysqlAdapter, listTables: customFn }` when metadata quirks appear.
+ */
+export const adapters: Record<DatasourceType, DatasourceAdapter> =
+  Object.fromEntries(
+    DATASOURCE_TYPES.map((type) => [
+      type,
+      datasourceProtocol(type) === 'mysql' ? mysqlAdapter : pgAdapter
+    ])
+  ) as Record<DatasourceType, DatasourceAdapter>;
+
+function adapterFor(config: DatasourceConfig): DatasourceAdapter {
+  const adapter = adapters[config.type];
+  if (!adapter) {
+    throw new HttpError(400, `Unsupported datasource type: ${config.type}`);
+  }
+  return adapter;
+}
+
+/**
+ * Test connectivity to a target datasource.
+ * Failures return ok:false instead of throwing.
+ */
+export async function testConnection(config: DatasourceConfig): Promise<TestConnectionResult> {
+  return adapterFor(config).testConnection(config);
+}
+
+/**
+ * List tables in the target database.
+ */
+export async function listTables(config: DatasourceConfig): Promise<TableInfo[]> {
+  return adapterFor(config).listTables(config);
+}
+
+/**
+ * Describe columns for one or more tables.
+ */
+export async function describeTables(
+  config: DatasourceConfig,
+  tables: string[]
+): Promise<Record<string, { comment: string; columns: ColumnDefinition[] }>> {
+  return adapterFor(config).describeTables(config, tables);
+}
+
+/**
+ * Execute a SELECT statement with named `:param` placeholders.
+ */
+export async function query(
+  config: DatasourceConfig,
+  sql: string,
+  params: Record<string, unknown> = {}
+): Promise<QueryResult> {
+  return adapterFor(config).query(config, sql, params);
+}
+
+/**
+ * Execute an INSERT / UPDATE / DELETE statement with named `:param` placeholders.
+ */
+export async function execute(
+  config: DatasourceConfig,
+  sql: string,
+  params: Record<string, unknown> = {}
+): Promise<ExecuteResult> {
+  return adapterFor(config).execute(config, sql, params);
+}
+
+/**
+ * Execute a multi-statement SQL script inside a single transaction.
+ * Any statement failure rolls back the whole script.
+ * Returns per-statement results (query rows or write affected_rows).
+ */
+export async function executeScript(
+  config: DatasourceConfig,
+  sql: string,
+  params: Record<string, unknown> = {}
+): Promise<ScriptResult> {
+  return adapterFor(config).executeScript(config, sql, params);
 }

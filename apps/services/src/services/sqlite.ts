@@ -13,7 +13,11 @@ import type {
   SqlType,
   ColumnDefinition
 } from '../types';
+import { DATASOURCE_TYPES } from '../types';
 import type { DatasourceConfig } from './datasource';
+
+/** SQL fragment for connections.type CHECK constraint. */
+const CONNECTIONS_TYPE_CHECK = DATASOURCE_TYPES.map((t) => `'${t}'`).join(', ');
 
 /** Minimal sync SQLite surface shared by better-sqlite3 (Node) and bun:sqlite (Bun). */
 interface SqliteRunResult {
@@ -136,7 +140,7 @@ CREATE TABLE IF NOT EXISTS connections (
   id TEXT PRIMARY KEY,
   app_id TEXT NOT NULL,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK(type IN ('mysql', 'postgresql')),
+  type TEXT NOT NULL CHECK(type IN (${CONNECTIONS_TYPE_CHECK})),
   host TEXT NOT NULL,
   port INTEGER NOT NULL,
   username TEXT NOT NULL,
@@ -500,6 +504,7 @@ export function getDB(): SqliteDatabase {
   migrateInvokeLogsParams(db);
   migrateSqlsTypeCheck(db);
   migrateSqlsStatusCheck(db);
+  migrateConnectionsTypeCheck(db);
 
   dbInstance = db;
   dbPathResolved = resolved;
@@ -634,6 +639,69 @@ DROP TABLE sqls;
 ALTER TABLE sqls_new RENAME TO sqls;
 CREATE INDEX IF NOT EXISTS idx_sqls_app_id ON sqls(app_id);
 CREATE INDEX IF NOT EXISTS idx_sqls_connection_id ON sqls(connection_id);
+`);
+    db.exec('COMMIT');
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
+    throw err;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
+/**
+ * Rebuild `connections` when the type CHECK constraint predates protocol-compatible
+ * datasource types (mariadb, tidb, …). SQLite cannot ALTER CHECK constraints in place.
+ */
+function migrateConnectionsTypeCheck(db: SqliteDatabase): void {
+  const row = db
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'connections'"
+    )
+    .get() as { sql?: string } | undefined;
+  if (!row?.sql) {
+    return;
+  }
+  const missing = DATASOURCE_TYPES.some((t) => !row.sql!.includes(`'${t}'`));
+  if (!missing) {
+    return;
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec('BEGIN');
+    db.exec(`
+CREATE TABLE connections_new (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK(type IN (${CONNECTIONS_TYPE_CHECK})),
+  host TEXT NOT NULL,
+  port INTEGER NOT NULL,
+  username TEXT NOT NULL,
+  password_enc TEXT NOT NULL,
+  database TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'disabled')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE,
+  UNIQUE(app_id, name)
+);
+INSERT INTO connections_new (
+  id, app_id, name, type, host, port, username, password_enc, database,
+  status, created_at, updated_at
+)
+SELECT
+  id, app_id, name, type, host, port, username, password_enc, database,
+  status, created_at, updated_at
+FROM connections;
+DROP TABLE connections;
+ALTER TABLE connections_new RENAME TO connections;
+CREATE INDEX IF NOT EXISTS idx_connections_app_id ON connections(app_id);
 `);
     db.exec('COMMIT');
   } catch (err) {

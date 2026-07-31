@@ -2,7 +2,7 @@
 
 [English](./README.md) | **简体中文**
 
-将已注册的 SQL 语句转换为基于 MySQL / PostgreSQL 的、带鉴权的 HTTP API。
+将已注册的 SQL 语句转换为基于 MySQL / PostgreSQL 协议兼容库的、带鉴权的 HTTP API。
 
 创建应用、添加数据库连接、用命名参数注册 SQL，即可通过 `/openapi/invoke/{uuid}` 调用 —— 可选 Admin Console，以及用于 SQL 生成/审查的本地 LLM。
 
@@ -10,7 +10,7 @@
 
 - **SQL → HTTP API** — 注册一次 SQL，通过 Bearer Api-Key 调用。方法映射：`SELECT` → `GET`、`INSERT` → `POST`、`UPDATE` → `PATCH`、多语句 / `CALL` → `complex`（`POST`）。静态审计禁止 `DROP` / `DELETE` / `TRUNCATE`
 - **应用与 Api-Key 管理** — 多租户应用，密钥格式 `sk2a_…`（明文仅在创建时展示一次）
-- **连接管理** — 支持 MySQL / PostgreSQL；密码使用 AES-256-GCM 加密存储
+- **连接管理** — 支持 MySQL / PostgreSQL 及协议兼容库（MariaDB、TiDB、OceanBase、Doris、StarRocks、CockroachDB、YugabyteDB、openGauss、KingbaseES）；密码使用 AES-256-GCM 加密存储
 - **模型元数据** — 同步表/字段信息，供 AI 上下文与文档使用
 - **AI 辅助 SQL**（可选）— 通过 `node-llama-cpp` 加载本地 GGUF 模型，支持生成与审查（语法、性能与安全）
 - **调用日志** — 请求历史记录，支持按保留天数自动清理
@@ -39,7 +39,7 @@ flowchart LR
   CLI[CLI]
   API[services :13334]
   Meta[(SQLite 元数据)]
-  DB[(MySQL / PostgreSQL)]
+  DB[(MySQL / PG 协议族)]
   LLM[本地 GGUF LLM]
 
   Client -->|"Bearer Api-Key /openapi/*"| API
@@ -56,7 +56,7 @@ flowchart LR
 | `apps/admin` | Web 管理界面 | React 19、Vite、TanStack Router/Query、shadcn/ui、CodeMirror SQL 编辑器 |
 | `packages/commands` | 命令行工具 | `@axiosleo/cli-tool` |
 
-**说明：** 业务数据源仅支持 MySQL / PostgreSQL。SQLite（默认 `./data/sql2api.db`）是内部元数据存储，用于应用、密钥、连接、模型、SQL 与日志。
+**说明：** 业务数据源支持 MySQL / PostgreSQL 及协议兼容库（各自独立 Type，驱动复用 `mysql2` / `pg`）。SQLite（默认 `./data/sql2api.db`）是内部元数据存储，用于应用、密钥、连接、模型、SQL 与日志。
 
 ## 环境要求
 

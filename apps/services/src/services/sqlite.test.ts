@@ -231,6 +231,73 @@ describe('sqlite service', function () {
     assert.ok(removeApp(app.id));
   });
 
+  it('migrates connections type CHECK to include protocol-compatible types', () => {
+    closeDB();
+    const legacyPath = path.join(tmpDir, 'legacy-conn-type.db');
+    process.env.SQLITE_PATH = legacyPath;
+
+    const Database = require('better-sqlite3') as typeof import('better-sqlite3');
+    const raw = new Database(legacyPath);
+    raw.exec(`
+CREATE TABLE apps (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE connections (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK(type IN ('mysql', 'postgresql')),
+  host TEXT NOT NULL,
+  port INTEGER NOT NULL,
+  username TEXT NOT NULL,
+  password_enc TEXT NOT NULL,
+  database TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(app_id, name)
+);
+CREATE INDEX idx_connections_app_id ON connections(app_id);
+INSERT INTO apps VALUES ('a1','legacy-conn','', 'active','t','t');
+INSERT INTO connections VALUES (
+  'c1','a1','legacy-mysql','mysql','127.0.0.1',3306,'u','enc','db','active','t','t'
+);
+`);
+    raw.close();
+
+    const db = getDB();
+    const ddl = db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'connections'"
+      )
+      .get() as { sql: string };
+    assert.ok(ddl.sql.includes("'tidb'"), 'CHECK should include tidb');
+    assert.ok(ddl.sql.includes("'opengauss'"), 'CHECK should include opengauss');
+    assert.ok(ddl.sql.includes("'mariadb'"), 'CHECK should include mariadb');
+
+    const conn = createConnection({
+      app_id: 'a1',
+      name: 'after-migrate-tidb',
+      type: 'tidb',
+      host: '127.0.0.1',
+      port: 4000,
+      username: 'root',
+      password: 'pass',
+      database: 'demo'
+    });
+    assert.strictEqual(conn.type, 'tidb');
+    assert.strictEqual(getConnection('a1', 'c1')?.type, 'mysql');
+
+    closeDB();
+    process.env.SQLITE_PATH = path.join(tmpDir, 'test.db');
+    getDB();
+  });
+
   it('migrates sqls status CHECK to include draft', () => {
     closeDB();
     const legacyPath = path.join(tmpDir, 'legacy-status.db');

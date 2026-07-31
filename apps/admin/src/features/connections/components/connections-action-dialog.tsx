@@ -27,6 +27,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/password-input'
 import { SelectDropdown } from '@/components/select-dropdown'
+import {
+  DATASOURCE_DEFAULT_PORTS,
+  DATASOURCE_SELECT_ITEMS,
+  DATASOURCE_TYPES,
+  isDatasourceType,
+  type DatasourceType,
+} from '@/lib/datasource'
 import { type Connection } from '../data/schema'
 
 const formSchema = z.object({
@@ -35,7 +42,7 @@ const formSchema = z.object({
     .string()
     .min(1, 'Name is required.')
     .max(64, 'Name must be at most 64 characters.'),
-  type: z.enum(['mysql', 'postgresql']),
+  type: z.enum(DATASOURCE_TYPES),
   host: z.string().min(1, 'Host is required.'),
   port: z.coerce
     .number()
@@ -185,6 +192,17 @@ export function ConnectionsActionDialog({
     currentRow?.app_id ||
     '—'
 
+  const handleTypeChange = (value: string) => {
+    const prevType = form.getValues('type') as DatasourceType
+    form.setValue('type', value as DatasourceType, { shouldValidate: true })
+    if (!isDatasourceType(value)) return
+    const currentPort = form.getValues('port')
+    const prevDefault = DATASOURCE_DEFAULT_PORTS[prevType]
+    if (currentPort === prevDefault) {
+      form.setValue('port', DATASOURCE_DEFAULT_PORTS[value])
+    }
+  }
+
   return (
     <Dialog
       open={open}
@@ -262,23 +280,9 @@ export function ConnectionsActionDialog({
                     <SelectDropdown
                       isControlled
                       defaultValue={field.value}
-                      onValueChange={(value) => {
-                        field.onChange(value)
-                        if (value === 'mysql' && form.getValues('port') === 5432) {
-                          form.setValue('port', 3306)
-                        }
-                        if (
-                          value === 'postgresql' &&
-                          form.getValues('port') === 3306
-                        ) {
-                          form.setValue('port', 5432)
-                        }
-                      }}
+                      onValueChange={handleTypeChange}
                       placeholder='Select type'
-                      items={[
-                        { label: 'MySQL', value: 'mysql' },
-                        { label: 'PostgreSQL', value: 'postgresql' },
-                      ]}
+                      items={DATASOURCE_SELECT_ITEMS}
                     />
                     <FormMessage />
                   </FormItem>

@@ -9,12 +9,30 @@ import type {
   SqlStatus,
   SqlType
 } from '../../types';
-import { paginationRules, SQL_TYPE_TO_METHOD } from '../../types';
+import {
+  datasourceProtocol,
+  paginationRules,
+  SQL_TYPE_TO_METHOD
+} from '../../types';
 import type { SqlRecord } from '../../services/sqlite';
 import {
   hasForbiddenKeywordOutsideQuotes,
   splitSqlStatements
 } from '../../services/sql-text';
+
+/**
+ * Map sql2api DatasourceType to node-sql-parser `database` option.
+ * MariaDB has a native dialect; other MySQL-protocol engines use MySQL;
+ * PostgreSQL-protocol engines use PostgresQL.
+ */
+export function parserDatabase(
+  dialect: DatasourceType
+): 'MySQL' | 'MariaDB' | 'PostgresQL' {
+  if (dialect === 'mariadb') {
+    return 'MariaDB';
+  }
+  return datasourceProtocol(dialect) === 'mysql' ? 'MySQL' : 'PostgresQL';
+}
 
 export interface SqlItem {
   id: string;
@@ -373,7 +391,7 @@ export function detectStatementKind(
   dialect: DatasourceType = 'mysql'
 ): StatementKind {
   const normalized = replaceNamedParamsForParse(sql);
-  const database = dialect === 'mysql' ? 'MySQL' : 'PostgresQL';
+  const database = parserDatabase(dialect);
   const parser = new Parser();
 
   try {
@@ -530,7 +548,7 @@ export function extractTableNames(
   dialect: DatasourceType = 'mysql'
 ): string[] {
   const normalized = replaceNamedParamsForParse(sql);
-  const database = dialect === 'mysql' ? 'MySQL' : 'PostgresQL';
+  const database = parserDatabase(dialect);
   const parser = new Parser();
   const names = new Set<string>();
 

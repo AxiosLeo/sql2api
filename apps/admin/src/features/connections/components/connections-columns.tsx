@@ -1,4 +1,9 @@
 import { type ColumnDef } from '@tanstack/react-table'
+import {
+  DATASOURCE_LABELS,
+  datasourceProtocol,
+  isDatasourceType,
+} from '@/lib/datasource'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { DataTableColumnHeader } from '@/components/data-table'
@@ -14,13 +19,28 @@ const statusClass = new Map<string, string>([
   ],
 ])
 
-const typeClass = new Map<string, string>([
-  ['mysql', 'bg-blue-100/50 text-blue-900 dark:text-blue-200 border-blue-300'],
-  [
-    'postgresql',
+const protocolClass = {
+  mysql: 'bg-blue-100/50 text-blue-900 dark:text-blue-200 border-blue-300',
+  postgresql:
     'bg-indigo-100/50 text-indigo-900 dark:text-indigo-200 border-indigo-300',
-  ],
-])
+} as const
+
+const fallbackTypeClass =
+  'bg-neutral-100/50 text-neutral-900 dark:text-neutral-200 border-neutral-300'
+
+function typeBadgeClass(type: string): string {
+  if (!isDatasourceType(type)) {
+    return fallbackTypeClass
+  }
+  return protocolClass[datasourceProtocol(type)]
+}
+
+function typeBadgeLabel(type: string): string {
+  if (isDatasourceType(type)) {
+    return DATASOURCE_LABELS[type]
+  }
+  return type
+}
 
 export type ConnectionsColumnsOptions = {
   appNameById: Map<string, string>
@@ -66,11 +86,8 @@ export function createConnectionsColumns(
       cell: ({ row }) => {
         const type = row.getValue('type') as string
         return (
-          <Badge
-            variant='outline'
-            className={cn('capitalize', typeClass.get(type))}
-          >
-            {type}
+          <Badge variant='outline' className={cn(typeBadgeClass(type))}>
+            {typeBadgeLabel(type)}
           </Badge>
         )
       },

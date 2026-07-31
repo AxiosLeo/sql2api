@@ -1,6 +1,7 @@
 import { apiRequest } from '@/lib/api-client'
+import type { DatasourceType } from '@/lib/datasource'
 
-export type DatasourceType = 'mysql' | 'postgresql'
+export type { DatasourceType }
 export type ConnectionStatus = 'active' | 'disabled'
 
 export interface ConnectionItem {

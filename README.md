@@ -2,7 +2,7 @@
 
 **English** | [简体中文](./README.zh-CN.md)
 
-Turn registered SQL statements into authenticated HTTP APIs over MySQL and PostgreSQL.
+Turn registered SQL statements into authenticated HTTP APIs over MySQL / PostgreSQL and protocol-compatible engines.
 
 Create an application, add a database connection, register SQL with named parameters, and invoke it via `/openapi/invoke/{uuid}` — with an optional Admin Console and local LLM for SQL generation/review.
 
@@ -10,7 +10,7 @@ Create an application, add a database connection, register SQL with named parame
 
 - **SQL → HTTP API** — Register SQL once, invoke it with Bearer Api-Key auth. Method mapping: `SELECT` → `GET`, `INSERT` → `POST`, `UPDATE` → `PATCH`, multi-statement / `CALL` → `complex` (`POST`). `DROP` / `DELETE` / `TRUNCATE` are blocked by static audit
 - **App & Api-Key management** — Multi-tenant apps with `sk2a_…` keys (plaintext shown only once on create)
-- **Connections** — MySQL and PostgreSQL datasources; passwords stored with AES-256-GCM
+- **Connections** — MySQL / PostgreSQL and protocol-compatible datasources (MariaDB, TiDB, OceanBase, Doris, StarRocks, CockroachDB, YugabyteDB, openGauss, KingbaseES); passwords stored with AES-256-GCM
 - **Models** — Sync table/column metadata for AI context and documentation
 - **AI-assisted SQL** (optional) — Local GGUF models via `node-llama-cpp` for generate and review (syntax, performance, and safety)
 - **Invocation logs** — Request history with configurable retention purge
@@ -39,7 +39,7 @@ flowchart LR
   CLI[CLI]
   API[services :13334]
   Meta[(SQLite meta store)]
-  DB[(MySQL / PostgreSQL)]
+  DB[(MySQL / PG family)]
   LLM[Local GGUF LLM]
 
   Client -->|"Bearer Api-Key /openapi/*"| API
@@ -56,7 +56,7 @@ flowchart LR
 | `apps/admin` | Web admin UI | React 19, Vite, TanStack Router/Query, shadcn/ui, CodeMirror SQL editor |
 | `packages/commands` | CLI | `@axiosleo/cli-tool` |
 
-**Note:** Customer datasources are MySQL/PostgreSQL only. SQLite (`./data/sql2api.db` by default) is the internal meta store for apps, keys, connections, models, SQLs, and logs.
+**Note:** Customer datasources support MySQL / PostgreSQL and protocol-compatible engines (each with its own type; drivers reuse `mysql2` / `pg`). SQLite (`./data/sql2api.db` by default) is the internal meta store for apps, keys, connections, models, SQLs, and logs.
 
 ## Requirements
 

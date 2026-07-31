@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "sql2api Connections API",
-    "description": "数据库连接管理模块接口（MySQL / PostgreSQL）。所有业务接口需 Bearer Api-Key 鉴权。",
+    "description": "数据库连接管理模块接口（MySQL / PostgreSQL 协议兼容库）。所有业务接口需 Bearer Api-Key 鉴权。",
     "version": "0.0.1"
   },
   "servers": [
@@ -518,7 +518,16 @@
         "type": "string",
         "enum": [
           "mysql",
-          "postgresql"
+          "mariadb",
+          "tidb",
+          "oceanbase",
+          "doris",
+          "starrocks",
+          "postgresql",
+          "cockroachdb",
+          "yugabytedb",
+          "opengauss",
+          "kingbase"
         ]
       },
       "EntityStatus": {

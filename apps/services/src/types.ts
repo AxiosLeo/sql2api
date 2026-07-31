@@ -1,4 +1,63 @@
-export type DatasourceType = 'mysql' | 'postgresql';
+/** Wire protocol used by the Node driver (mysql2 or pg). */
+export type DatasourceProtocol = 'mysql' | 'postgresql';
+
+/**
+ * All supported customer datasource types.
+ * Protocol-compatible variants reuse mysql2 / pg; each keeps an independent type
+ * so dialect prompts and future adapter overrides can differ per engine.
+ */
+export const DATASOURCE_TYPES = [
+  'mysql',
+  'mariadb',
+  'tidb',
+  'oceanbase',
+  'doris',
+  'starrocks',
+  'postgresql',
+  'cockroachdb',
+  'yugabytedb',
+  'opengauss',
+  'kingbase'
+] as const;
+
+export type DatasourceType = (typeof DATASOURCE_TYPES)[number];
+
+/** Map each datasource type to the wire protocol / Node driver family. */
+export const DATASOURCE_PROTOCOLS: Record<DatasourceType, DatasourceProtocol> = {
+  mysql: 'mysql',
+  mariadb: 'mysql',
+  tidb: 'mysql',
+  oceanbase: 'mysql',
+  doris: 'mysql',
+  starrocks: 'mysql',
+  postgresql: 'postgresql',
+  cockroachdb: 'postgresql',
+  yugabytedb: 'postgresql',
+  opengauss: 'postgresql',
+  kingbase: 'postgresql'
+};
+
+export function datasourceProtocol(type: DatasourceType): DatasourceProtocol {
+  return DATASOURCE_PROTOCOLS[type];
+}
+
+/** Human-readable labels for AI prompts and UI-facing messages. */
+export const DATASOURCE_LABELS: Record<DatasourceType, string> = {
+  mysql: 'MySQL',
+  mariadb: 'MariaDB (MySQL compatible)',
+  tidb: 'TiDB (MySQL compatible)',
+  oceanbase: 'OceanBase (MySQL compatible)',
+  doris: 'Apache Doris (MySQL compatible)',
+  starrocks: 'StarRocks (MySQL compatible)',
+  postgresql: 'PostgreSQL',
+  cockroachdb: 'CockroachDB (PostgreSQL compatible)',
+  yugabytedb: 'YugabyteDB (PostgreSQL compatible)',
+  opengauss: 'openGauss (PostgreSQL compatible)',
+  kingbase: 'KingbaseES (PostgreSQL compatible)'
+};
+
+/** validatorjs `in:` rule fragment for connection type fields. */
+export const DATASOURCE_TYPE_IN_RULE = DATASOURCE_TYPES.join(',');
 
 export type SqlType = 'select' | 'insert' | 'update' | 'complex';
 
