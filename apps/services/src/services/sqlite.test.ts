@@ -279,6 +279,8 @@ INSERT INTO connections VALUES (
     assert.ok(ddl.sql.includes("'tidb'"), 'CHECK should include tidb');
     assert.ok(ddl.sql.includes("'opengauss'"), 'CHECK should include opengauss');
     assert.ok(ddl.sql.includes("'mariadb'"), 'CHECK should include mariadb');
+    assert.ok(ddl.sql.includes("'oracle'"), 'CHECK should include oracle');
+    assert.ok(ddl.sql.includes("'sqlserver'"), 'CHECK should include sqlserver');
 
     const conn = createConnection({
       app_id: 'a1',
@@ -291,6 +293,30 @@ INSERT INTO connections VALUES (
       database: 'demo'
     });
     assert.strictEqual(conn.type, 'tidb');
+
+    const oracle = createConnection({
+      app_id: 'a1',
+      name: 'after-migrate-oracle',
+      type: 'oracle',
+      host: '127.0.0.1',
+      port: 1521,
+      username: 'system',
+      password: 'pass',
+      database: 'ORCLPDB1'
+    });
+    assert.strictEqual(oracle.type, 'oracle');
+
+    const mssql = createConnection({
+      app_id: 'a1',
+      name: 'after-migrate-sqlserver',
+      type: 'sqlserver',
+      host: '127.0.0.1',
+      port: 1433,
+      username: 'sa',
+      password: 'pass',
+      database: 'demo'
+    });
+    assert.strictEqual(mssql.type, 'sqlserver');
     assert.strictEqual(getConnection('a1', 'c1')?.type, 'mysql');
 
     closeDB();

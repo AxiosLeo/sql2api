@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
-import { sql, MySQL, PostgreSQL } from '@codemirror/lang-sql'
+import { sql, MySQL, PostgreSQL, MSSQL, PLSQL } from '@codemirror/lang-sql'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { useTheme } from '@/context/theme-provider'
 import { cn } from '@/lib/utils'
 
-export type SqlDialect = 'mysql' | 'postgresql'
+export type SqlDialect = 'mysql' | 'postgresql' | 'oracle' | 'sqlserver'
 
 type SqlEditorProps = {
   value: string
@@ -14,6 +14,19 @@ type SqlEditorProps = {
   readOnly?: boolean
   minHeight?: string
   className?: string
+}
+
+function dialectExtension(dialect: SqlDialect) {
+  switch (dialect) {
+    case 'postgresql':
+      return PostgreSQL
+    case 'oracle':
+      return PLSQL
+    case 'sqlserver':
+      return MSSQL
+    default:
+      return MySQL
+  }
 }
 
 export function SqlEditor({
@@ -29,7 +42,7 @@ export function SqlEditor({
   const extensions = useMemo(
     () => [
       sql({
-        dialect: dialect === 'postgresql' ? PostgreSQL : MySQL,
+        dialect: dialectExtension(dialect),
       }),
     ],
     [dialect]

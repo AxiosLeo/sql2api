@@ -203,6 +203,8 @@ export function ConnectionsActionDialog({
     }
   }
 
+  const watchedType = form.watch('type')
+
   return (
     <Dialog
       open={open}
@@ -353,9 +355,16 @@ export function ConnectionsActionDialog({
               name='database'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Database</FormLabel>
+                  <FormLabel>
+                    {watchedType === 'oracle' ? 'Service Name' : 'Database'}
+                  </FormLabel>
                   <FormControl>
-                    <Input placeholder='demo' {...field} />
+                    <Input
+                      placeholder={
+                        watchedType === 'oracle' ? 'ORCLPDB1' : 'demo'
+                      }
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

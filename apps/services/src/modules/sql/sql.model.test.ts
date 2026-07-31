@@ -17,10 +17,11 @@ import {
 } from '../../types';
 
 describe('datasource protocol mapping', () => {
-  it('maps every DatasourceType to mysql or postgresql protocol', () => {
+  it('maps every DatasourceType to a known protocol', () => {
+    const allowed = new Set(['mysql', 'postgresql', 'oracle', 'sqlserver']);
     for (const type of DATASOURCE_TYPES) {
       const protocol = datasourceProtocol(type);
-      assert.ok(protocol === 'mysql' || protocol === 'postgresql');
+      assert.ok(allowed.has(protocol), `unexpected protocol for ${type}`);
       assert.strictEqual(DATASOURCE_PROTOCOLS[type], protocol);
     }
   });
@@ -49,6 +50,11 @@ describe('datasource protocol mapping', () => {
       assert.strictEqual(datasourceProtocol(type), 'postgresql');
     }
   });
+
+  it('maps oracle and sqlserver to dedicated protocols', () => {
+    assert.strictEqual(datasourceProtocol('oracle'), 'oracle');
+    assert.strictEqual(datasourceProtocol('sqlserver'), 'sqlserver');
+  });
 });
 
 describe('parserDatabase', () => {
@@ -66,6 +72,11 @@ describe('parserDatabase', () => {
     assert.strictEqual(parserDatabase('postgresql'), 'PostgresQL');
     assert.strictEqual(parserDatabase('cockroachdb'), 'PostgresQL');
     assert.strictEqual(parserDatabase('kingbase'), 'PostgresQL');
+  });
+
+  it('uses TransactSQL for sqlserver and MySQL best-effort for oracle', () => {
+    assert.strictEqual(parserDatabase('sqlserver'), 'TransactSQL');
+    assert.strictEqual(parserDatabase('oracle'), 'MySQL');
   });
 });
 
@@ -182,6 +193,20 @@ describe('sql.model detectSqlType / analyzeSql', () => {
     );
     assert.strictEqual(analysis.sql_type, 'insert');
     assert.strictEqual(analysis.method, 'POST');
+  });
+
+  it('detects SELECT for sqlserver dialect', () => {
+    assert.strictEqual(
+      detectSqlType('SELECT id FROM users WHERE id = :id', 'sqlserver'),
+      'select'
+    );
+  });
+
+  it('detects SELECT for oracle dialect (best-effort parser)', () => {
+    assert.strictEqual(
+      detectSqlType('SELECT id FROM users WHERE id = :id', 'oracle'),
+      'select'
+    );
   });
 
   it('classifies DELETE as complex (blocked by static audit)', () => {

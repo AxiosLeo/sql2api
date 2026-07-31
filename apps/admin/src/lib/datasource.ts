@@ -15,11 +15,17 @@ export const DATASOURCE_TYPES = [
   'yugabytedb',
   'opengauss',
   'kingbase',
+  'oracle',
+  'sqlserver',
 ] as const
 
 export type DatasourceType = (typeof DATASOURCE_TYPES)[number]
 
-export type DatasourceProtocol = 'mysql' | 'postgresql'
+export type DatasourceProtocol =
+  | 'mysql'
+  | 'postgresql'
+  | 'oracle'
+  | 'sqlserver'
 
 export const DATASOURCE_PROTOCOLS: Record<DatasourceType, DatasourceProtocol> =
   {
@@ -34,6 +40,8 @@ export const DATASOURCE_PROTOCOLS: Record<DatasourceType, DatasourceProtocol> =
     yugabytedb: 'postgresql',
     opengauss: 'postgresql',
     kingbase: 'postgresql',
+    oracle: 'oracle',
+    sqlserver: 'sqlserver',
   }
 
 export function datasourceProtocol(
@@ -57,6 +65,8 @@ export const DATASOURCE_LABELS: Record<DatasourceType, string> = {
   yugabytedb: 'YugabyteDB',
   opengauss: 'openGauss',
   kingbase: 'KingbaseES',
+  oracle: 'Oracle',
+  sqlserver: 'SQL Server',
 }
 
 /** Default TCP ports used when switching type in the connection form. */
@@ -72,6 +82,8 @@ export const DATASOURCE_DEFAULT_PORTS: Record<DatasourceType, number> = {
   yugabytedb: 5433,
   opengauss: 5432,
   kingbase: 54321,
+  oracle: 1521,
+  sqlserver: 1433,
 }
 
 export const DATASOURCE_SELECT_ITEMS = DATASOURCE_TYPES.map((value) => ({

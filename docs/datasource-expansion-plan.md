@@ -2,20 +2,20 @@
 
 > 记录时间：2026-07-31
 >
-> 客户数据源以独立 `DatasourceType` 注册；MySQL / PostgreSQL 协议兼容库复用 `mysql2` / `pg` 驱动。本文档按「扩展成本」分档规划。
+> 客户数据源以独立 `DatasourceType` 注册；MySQL / PostgreSQL 协议兼容库复用 `mysql2` / `pg`；Oracle / SQL Server 使用专用驱动适配器。
 
 ## 现状与扩展点
 
 当前架构中，数据源相关的扩展点非常集中：
 
-- `apps/services/src/types.ts` — `DATASOURCE_TYPES` / `DatasourceType`、`DATASOURCE_PROTOCOLS` 协议映射
-- `apps/services/src/services/datasource.ts` — `DatasourceAdapter` + 按 type 的 `adapters` 注册表（协议适配器可覆写）
+- `apps/services/src/types.ts` — `DATASOURCE_TYPES` / `DatasourceType`、`DATASOURCE_PROTOCOLS` 协议映射（`mysql` / `postgresql` / `oracle` / `sqlserver`）
+- `apps/services/src/services/datasource.ts` — `DatasourceAdapter` + `PROTOCOL_ADAPTERS` 按协议注册，再映射到各 type
   - `testConnection`（测试连接）
   - `listTables` / `describeTables`（元数据自省）
   - `query` / `execute`（单语句执行）
   - `executeScript`（多语句事务执行）
-- 参数统一使用 `:name` 命名占位符；MySQL 协议走 `namedPlaceholders`，PG 协议通过 `convertNamedParams` 转成 `$n`
-- `apps/services/src/modules/sql/sql.model.ts` — SQL 方言分析（基于 `node-sql-parser`，`parserDatabase()`）
+- 参数统一使用 `:name` 命名占位符；MySQL 协议走 `namedPlaceholders`，PG 协议转 `$n`，SQL Server 转 `@name`，Oracle 原生 `:name`
+- `apps/services/src/modules/sql/sql.model.ts` — SQL 方言分析（`parserDatabase()`；Oracle 用 MySQL best-effort）
 - `apps/services/src/services/ai.ts` — 按 dialect 显示名生成 AI 提示词
 
 ---
@@ -45,13 +45,11 @@
 
 ## 第二档：需要新驱动，但架构完全适配
 
-关系模型与事务语义都契合现有架构，成本主要在新驱动接入与元数据 SQL 适配。
-
-| 数据库 | 驱动 | 适配要点 |
-|---|---|---|
-| Oracle | `oracledb`（thin 模式纯 JS，免装客户端） | 原生使用 `:name` 绑定变量，与现有参数风格完全一致，无需转换；元数据走 `ALL_TAB_COLUMNS` |
-| SQL Server | `mssql` | 支持 `@name` 命名参数（`:name` → `@name` 转换简单）；元数据走 `INFORMATION_SCHEMA`；事务支持完整；国内政企场景需求较多 |
-| SQLite / DuckDB | `better-sqlite3`（已是项目依赖）/ `duckdb` | 驱动成本低；但为文件型数据库，`DatasourceConfig` 的 host/port/username/password 形态需调整（字段可选化或新增 `file_path`），前后端表单与校验规则需同步修改 |
+| 数据库 | Type | 驱动 | 状态 |
+|---|---|---|---|
+| Oracle | `oracle` | `oracledb`（thin） | **已实施** — `:name` 原生绑定；`database` 字段为 Service Name；元数据走 `USER_*` |
+| SQL Server | `sqlserver` | `mssql` | **已实施** — `:name` → `@name`；元数据走 `INFORMATION_SCHEMA`；默认 `encrypt` + `trustServerCertificate` |
+| SQLite / DuckDB | — | `better-sqlite3` / `duckdb` | 待实施 — 文件型库需调整 `DatasourceConfig`（host/port 可选或 `file_path`） |
 
 ## 第三档：能做但语义有折损
 
@@ -69,17 +67,18 @@
 |---|---|
 | `apps/services/src/types.ts` | 扩展 `DATASOURCE_TYPES` / 协议映射 / 标签 |
 | `apps/services/src/modules/connection/connection.model.ts` | `DATASOURCE_TYPE_IN_RULE` 自动生成校验规则 |
-| `apps/services/src/services/datasource.ts` | 在 `adapters` 注册表挂上新 type（协议复用或自定义覆写） |
+| `apps/services/src/services/datasource.ts` | 在 `PROTOCOL_ADAPTERS` / `adapters` 注册表挂上新 type |
 | `apps/services/src/services/sqlite.ts` | `CONNECTIONS_TYPE_CHECK` + `migrateConnectionsTypeCheck` |
 | `apps/services/src/modules/sql/sql.model.ts` | `parserDatabase()` 方言映射 |
 | `apps/services/src/services/ai.ts` | `DATASOURCE_LABELS` 提示词显示名 |
 | `apps/services/src/services/openapi-specs/openapi.connection.json` | `DatasourceType` 枚举 |
 | `apps/admin/src/lib/datasource.ts` | 前端类型清单、默认端口、label |
-| `apps/admin` 连接表单 / 列徽章 / SQL 编辑器 | 类型选择与协议级方言 |
+| `apps/admin` 连接表单 / 列徽章 / SQL 编辑器 | 类型选择与方言（CodeMirror / sql-formatter） |
 | `docker-compose.yml` + `scripts/` | 本地测试库与 seed SQL（按需） |
 
 ## 优先级建议
 
 1. ~~**先零成本放开 MySQL / PG 协议兼容库**~~ — 已完成（第一档）
-2. **再做 Oracle**（`:name` 参数风格天然契合）**和 SQL Server**
-3. **最后视需求考虑 ClickHouse**（需先解决 `executeScript` 事务语义问题）
+2. ~~**再做 Oracle 和 SQL Server**~~ — 已完成（第二档前两项）
+3. **视需求做 SQLite / DuckDB**（文件型配置形态）
+4. **最后视需求考虑 ClickHouse**（需先解决 `executeScript` 事务语义问题）

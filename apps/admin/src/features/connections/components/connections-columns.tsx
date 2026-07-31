@@ -23,6 +23,9 @@ const protocolClass = {
   mysql: 'bg-blue-100/50 text-blue-900 dark:text-blue-200 border-blue-300',
   postgresql:
     'bg-indigo-100/50 text-indigo-900 dark:text-indigo-200 border-indigo-300',
+  oracle: 'bg-red-100/50 text-red-900 dark:text-red-200 border-red-300',
+  sqlserver:
+    'bg-emerald-100/50 text-emerald-900 dark:text-emerald-200 border-emerald-300',
 } as const
 
 const fallbackTypeClass =

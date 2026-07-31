@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { HttpError } from '@axiosleo/koapp';
-import { adapters, convertNamedParams } from './datasource';
+import { adapters, convertNamedParams, convertNamedParamsToAt } from './datasource';
 import { DATASOURCE_TYPES, datasourceProtocol } from '../types';
 
 describe('datasource adapters registry', () => {
@@ -21,12 +21,19 @@ describe('datasource adapters registry', () => {
     assert.strictEqual(adapters.mysql, adapters.mariadb);
     assert.strictEqual(adapters.postgresql, adapters.cockroachdb);
     assert.strictEqual(adapters.postgresql, adapters.opengauss);
+    assert.strictEqual(adapters.oracle, adapters.oracle);
+    assert.strictEqual(adapters.sqlserver, adapters.sqlserver);
     assert.notStrictEqual(adapters.mysql, adapters.postgresql);
+    assert.notStrictEqual(adapters.oracle, adapters.mysql);
+    assert.notStrictEqual(adapters.sqlserver, adapters.postgresql);
+    assert.notStrictEqual(adapters.oracle, adapters.sqlserver);
   });
 
   it('protocol helper matches adapter family', () => {
     assert.strictEqual(datasourceProtocol('doris'), 'mysql');
     assert.strictEqual(datasourceProtocol('yugabytedb'), 'postgresql');
+    assert.strictEqual(datasourceProtocol('oracle'), 'oracle');
+    assert.strictEqual(datasourceProtocol('sqlserver'), 'sqlserver');
   });
 });
 
@@ -90,5 +97,41 @@ describe('datasource convertNamedParams', () => {
     );
     assert.strictEqual(text, 'UPDATE users SET name = $1 WHERE id = $2');
     assert.deepStrictEqual(values, ['alice', 9]);
+  });
+});
+
+describe('datasource convertNamedParamsToAt', () => {
+  it('converts :name to @name', () => {
+    const { text, names } = convertNamedParamsToAt(
+      'SELECT * FROM users WHERE id = :id',
+      { id: 42 }
+    );
+    assert.strictEqual(text, 'SELECT * FROM users WHERE id = @id');
+    assert.deepStrictEqual(names, ['id']);
+  });
+
+  it('dedupes names while rewriting all occurrences', () => {
+    const { text, names } = convertNamedParamsToAt(
+      'SELECT * FROM t WHERE a = :x OR b = :x',
+      { x: 'v' }
+    );
+    assert.strictEqual(text, 'SELECT * FROM t WHERE a = @x OR b = @x');
+    assert.deepStrictEqual(names, ['x']);
+  });
+
+  it('skips quoted content and brackets', () => {
+    const { text, names } = convertNamedParamsToAt(
+      "SELECT ':not' AS s, [col:x] AS c, :id AS id",
+      { id: 1 }
+    );
+    assert.strictEqual(text, "SELECT ':not' AS s, [col:x] AS c, @id AS id");
+    assert.deepStrictEqual(names, ['id']);
+  });
+
+  it('throws HttpError when param is missing', () => {
+    assert.throws(
+      () => convertNamedParamsToAt('SELECT :missing', {}),
+      (err: unknown) => err instanceof HttpError && err.status === 400
+    );
   });
 });

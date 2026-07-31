@@ -1,10 +1,15 @@
-/** Wire protocol used by the Node driver (mysql2 or pg). */
-export type DatasourceProtocol = 'mysql' | 'postgresql';
+/** Wire protocol / Node driver family. */
+export type DatasourceProtocol =
+  | 'mysql'
+  | 'postgresql'
+  | 'oracle'
+  | 'sqlserver';
 
 /**
  * All supported customer datasource types.
- * Protocol-compatible variants reuse mysql2 / pg; each keeps an independent type
- * so dialect prompts and future adapter overrides can differ per engine.
+ * Protocol-compatible variants reuse mysql2 / pg; Oracle and SQL Server use
+ * dedicated drivers. Each keeps an independent type so dialect prompts and
+ * adapter overrides can differ per engine.
  */
 export const DATASOURCE_TYPES = [
   'mysql',
@@ -17,7 +22,9 @@ export const DATASOURCE_TYPES = [
   'cockroachdb',
   'yugabytedb',
   'opengauss',
-  'kingbase'
+  'kingbase',
+  'oracle',
+  'sqlserver'
 ] as const;
 
 export type DatasourceType = (typeof DATASOURCE_TYPES)[number];
@@ -34,7 +41,9 @@ export const DATASOURCE_PROTOCOLS: Record<DatasourceType, DatasourceProtocol> = 
   cockroachdb: 'postgresql',
   yugabytedb: 'postgresql',
   opengauss: 'postgresql',
-  kingbase: 'postgresql'
+  kingbase: 'postgresql',
+  oracle: 'oracle',
+  sqlserver: 'sqlserver'
 };
 
 export function datasourceProtocol(type: DatasourceType): DatasourceProtocol {
@@ -53,7 +62,9 @@ export const DATASOURCE_LABELS: Record<DatasourceType, string> = {
   cockroachdb: 'CockroachDB (PostgreSQL compatible)',
   yugabytedb: 'YugabyteDB (PostgreSQL compatible)',
   opengauss: 'openGauss (PostgreSQL compatible)',
-  kingbase: 'KingbaseES (PostgreSQL compatible)'
+  kingbase: 'KingbaseES (PostgreSQL compatible)',
+  oracle: 'Oracle',
+  sqlserver: 'SQL Server'
 };
 
 /** validatorjs `in:` rule fragment for connection type fields. */

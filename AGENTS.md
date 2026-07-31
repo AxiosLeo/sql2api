@@ -1,6 +1,6 @@
 # sql2api
 
-将注册的 SQL 语句转成带鉴权的 HTTP API（客户数据源：MySQL / PostgreSQL 协议兼容库）。pnpm monorepo（pnpm >= 9，Node >= 20）。
+将注册的 SQL 语句转成带鉴权的 HTTP API（客户数据源：MySQL / PostgreSQL 协议兼容库、Oracle、SQL Server）。pnpm monorepo（pnpm >= 9，Node >= 20）。
 
 ## 目录结构
 
@@ -15,7 +15,7 @@
 
 ## 关键事实
 
-- 元数据（应用、Api-Key、连接、模型、SQL、日志）存内部 SQLite，默认 `./data/sql2api.db`；客户数据源支持 MySQL / PostgreSQL 及协议兼容库（MariaDB、TiDB、OceanBase、Doris、StarRocks、CockroachDB、YugabyteDB、openGauss、KingbaseES），各自独立 `DatasourceType`，驱动按协议复用 `mysql2` / `pg`
+- 元数据（应用、Api-Key、连接、模型、SQL、日志）存内部 SQLite，默认 `./data/sql2api.db`；客户数据源支持 MySQL / PostgreSQL 及协议兼容库（MariaDB、TiDB、OceanBase、Doris、StarRocks、CockroachDB、YugabyteDB、openGauss、KingbaseES），以及 Oracle（`oracledb` thin）与 SQL Server（`mssql`）；各自独立 `DatasourceType`，驱动按协议复用或专用适配器
 - 两套 API 面：`/openapi/*` 用 Bearer Api-Key（`sk2a_…`，明文仅创建时展示一次）；`/api/*` 用 Session cookie（管理台）
 - SQL 调用入口：`/openapi/invoke/{uuid}`；HTTP 方法映射：SELECT→GET、INSERT→POST、UPDATE→PATCH、多语句/CALL→complex(POST)；禁止 DROP/DELETE/TRUNCATE；`draft` / `disabled` 状态不可 invoke，仅 `enabled` 可调用且会出现在合并 OpenAPI 中
 - 合并 OpenAPI 直链：`GET /openapi.json`（Bearer 或 `?api_key=`），返回静态模块规范 + 当前应用 enabled SQL 的动态接口；管理台 `GET /api/openapi.json` 与 API Docs 页面；单条 `GET /sqls/{id}/openapi`

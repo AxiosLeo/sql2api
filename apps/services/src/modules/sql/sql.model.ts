@@ -22,16 +22,24 @@ import {
 
 /**
  * Map sql2api DatasourceType to node-sql-parser `database` option.
- * MariaDB has a native dialect; other MySQL-protocol engines use MySQL;
- * PostgreSQL-protocol engines use PostgresQL.
+ * MariaDB / TransactSQL have native dialects; Oracle is unsupported by the
+ * parser so MySQL is used as a best-effort (fallback keyword scan on failure).
  */
 export function parserDatabase(
   dialect: DatasourceType
-): 'MySQL' | 'MariaDB' | 'PostgresQL' {
+): 'MySQL' | 'MariaDB' | 'PostgresQL' | 'TransactSQL' {
   if (dialect === 'mariadb') {
     return 'MariaDB';
   }
-  return datasourceProtocol(dialect) === 'mysql' ? 'MySQL' : 'PostgresQL';
+  if (dialect === 'sqlserver') {
+    return 'TransactSQL';
+  }
+  const protocol = datasourceProtocol(dialect);
+  if (protocol === 'postgresql') {
+    return 'PostgresQL';
+  }
+  // mysql family + oracle (best-effort)
+  return 'MySQL';
 }
 
 export interface SqlItem {
