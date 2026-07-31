@@ -83,7 +83,7 @@ docker compose up -d
 | Database   | Host port | User / Password                         | Database  |
 |------------|-----------|-----------------------------------------|-----------|
 | MySQL 8    | `33306`   | `root` / `sql2api_dev_pass`             | `main_db` |
-| PostgreSQL | `5432`    | `eagle` / `eagle_dev_pass`              | `eagle`   |
+| PostgreSQL | `5432`    | `sql2api` / `sql2api_dev_pass`              | `sql2api`   |
 
 Seed SQL under `scripts/db-init/` creates sample `users` / `orders` tables on first start.
 

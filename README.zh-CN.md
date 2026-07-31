@@ -83,7 +83,7 @@ docker compose up -d
 | 数据库 | 主机端口 | 用户 / 密码 | 库名 |
 |--------|----------|-------------|------|
 | MySQL 8 | `33306` | `root` / `sql2api_dev_pass` | `main_db` |
-| PostgreSQL | `5432` | `eagle` / `eagle_dev_pass` | `eagle` |
+| PostgreSQL | `5432` | `sql2api` / `sql2api_dev_pass` | `sql2api` |
 
 首次启动时，`scripts/db-init/` 下的种子 SQL 会创建示例 `users` / `orders` 表。
 
