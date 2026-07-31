@@ -6,6 +6,7 @@ import { AxiosError } from 'axios'
 import { Ban, CheckCircle2, Copy, FileJson, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getSqlOpenApiDoc, updateSql } from '@/api/sqls'
+import { copyToClipboard } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -61,7 +62,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
   const copyEndpoint = async () => {
     try {
-      await navigator.clipboard.writeText(row.original.endpoint)
+      await copyToClipboard(row.original.endpoint)
       toast.success('Endpoint copied.')
     } catch {
       toast.error('Failed to copy endpoint.')
@@ -71,7 +72,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const copyApiDoc = async () => {
     try {
       const spec = await getSqlOpenApiDoc(row.original.id)
-      await navigator.clipboard.writeText(JSON.stringify(spec, null, 2))
+      await copyToClipboard(JSON.stringify(spec, null, 2))
       toast.success('API Doc copied.')
     } catch (err) {
       const message =

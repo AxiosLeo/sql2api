@@ -1,6 +1,7 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
+import { copyToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -121,7 +122,7 @@ export function createSqlsColumns(
         const endpoint = row.original.endpoint
         const copyEndpoint = async () => {
           try {
-            await navigator.clipboard.writeText(endpoint)
+            await copyToClipboard(endpoint)
             toast.success('Endpoint copied.')
           } catch {
             toast.error('Failed to copy endpoint.')

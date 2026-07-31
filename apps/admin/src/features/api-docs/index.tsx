@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner'
 import { listApps } from '@/api/apps'
 import { getOpenApiSpec, type OpenApiSpec } from '@/api/docs'
+import { copyToClipboard } from '@/lib/clipboard'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -80,7 +81,7 @@ function MethodBadge({ method }: { method: string }) {
 
 async function copyText(text: string, successMsg: string) {
   try {
-    await navigator.clipboard.writeText(text)
+    await copyToClipboard(text)
     toast.success(successMsg)
   } catch {
     toast.error('Failed to copy.')

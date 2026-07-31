@@ -9,6 +9,7 @@ import {
   revokeAppKey,
   type CreateApiKeyResult,
 } from '@/api/apps'
+import { copyToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -88,7 +89,7 @@ export function AppsKeysDialog({
 
   const copyToken = async (token: string) => {
     try {
-      await navigator.clipboard.writeText(token)
+      await copyToClipboard(token)
       toast.success('Token copied to clipboard.')
     } catch {
       toast.error('Failed to copy token.')
