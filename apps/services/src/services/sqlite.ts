@@ -207,6 +207,64 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS meta_tables (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'disabled')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE,
+  UNIQUE(app_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS meta_fields (
+  id TEXT PRIMARY KEY,
+  table_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK(type IN (
+    'text', 'number', 'single_select', 'multi_select', 'datetime',
+    'created_by', 'updated_by', 'created_at', 'updated_at',
+    'one_way_link', 'two_way_link', 'parent_record', 'attachment'
+  )),
+  validator TEXT NOT NULL DEFAULT '',
+  config_json TEXT NOT NULL DEFAULT '{}',
+  is_system INTEGER NOT NULL DEFAULT 0,
+  sort INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (table_id) REFERENCES meta_tables(id) ON DELETE CASCADE,
+  UNIQUE(table_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS meta_shards (
+  id TEXT PRIMARY KEY,
+  table_id TEXT NOT NULL,
+  shard_no INTEGER NOT NULL,
+  physical_table TEXT NOT NULL UNIQUE,
+  row_count INTEGER NOT NULL DEFAULT 0,
+  capacity INTEGER NOT NULL DEFAULT 100000,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'sealed')),
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (table_id) REFERENCES meta_tables(id) ON DELETE CASCADE,
+  UNIQUE(table_id, shard_no)
+);
+
+CREATE TABLE IF NOT EXISTS meta_record_index (
+  record_id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  table_id TEXT NOT NULL,
+  shard_id TEXT NOT NULL,
+  created_by TEXT NOT NULL DEFAULT '',
+  updated_by TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE,
+  FOREIGN KEY (table_id) REFERENCES meta_tables(id) ON DELETE CASCADE,
+  FOREIGN KEY (shard_id) REFERENCES meta_shards(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_api_keys_app_id ON api_keys(app_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_token_hash ON api_keys(token_hash);
 CREATE INDEX IF NOT EXISTS idx_connections_app_id ON connections(app_id);
@@ -217,6 +275,12 @@ CREATE INDEX IF NOT EXISTS idx_sqls_connection_id ON sqls(connection_id);
 CREATE INDEX IF NOT EXISTS idx_invoke_logs_created_at ON invoke_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_invoke_logs_app_created ON invoke_logs(app_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_invoke_logs_sql_created ON invoke_logs(sql_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_meta_tables_app_id ON meta_tables(app_id);
+CREATE INDEX IF NOT EXISTS idx_meta_fields_table_id ON meta_fields(table_id);
+CREATE INDEX IF NOT EXISTS idx_meta_shards_table_id ON meta_shards(table_id);
+CREATE INDEX IF NOT EXISTS idx_meta_record_index_table_created ON meta_record_index(table_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_meta_record_index_app_created ON meta_record_index(app_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_meta_record_index_created ON meta_record_index(created_at);
 `;
 
 export interface AppRecord {

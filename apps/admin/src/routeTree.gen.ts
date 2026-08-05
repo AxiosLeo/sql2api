@@ -32,6 +32,8 @@ import { Route as AuthenticatedConnectionsIndexRouteImport } from './routes/_aut
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
 import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
+import { Route as AuthenticatedMetaRecordsIndexRouteImport } from './routes/_authenticated/meta-records/index'
+import { Route as AuthenticatedMetaTablesIndexRouteImport } from './routes/_authenticated/meta-tables/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
@@ -46,6 +48,7 @@ import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authentic
 import { Route as ClerkauthSignInRouteImport } from './routes/clerk/(auth)/sign-in'
 import { Route as ClerkauthSignUpRouteImport } from './routes/clerk/(auth)/sign-up'
 import { Route as ClerkAuthenticatedUserManagementRouteImport } from './routes/clerk/_authenticated/user-management'
+import { Route as AuthenticatedMetaTablesTableIdIndexRouteImport } from './routes/_authenticated/meta-tables/$tableId/index'
 import { Route as AuthenticatedSqlsSqlIdEditRouteImport } from './routes/_authenticated/sqls/$sqlId/edit'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -165,6 +168,18 @@ const AuthenticatedLogsIndexRoute = AuthenticatedLogsIndexRouteImport.update({
   path: '/logs/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMetaRecordsIndexRoute =
+  AuthenticatedMetaRecordsIndexRouteImport.update({
+    id: '/meta-records/',
+    path: '/meta-records/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMetaTablesIndexRoute =
+  AuthenticatedMetaTablesIndexRouteImport.update({
+    id: '/meta-tables/',
+    path: '/meta-tables/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedModelsIndexRoute =
   AuthenticatedModelsIndexRouteImport.update({
     id: '/models/',
@@ -243,6 +258,12 @@ const ClerkAuthenticatedUserManagementRoute =
     path: '/user-management',
     getParentRoute: () => ClerkAuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMetaTablesTableIdIndexRoute =
+  AuthenticatedMetaTablesTableIdIndexRouteImport.update({
+    id: '/meta-tables/$tableId/',
+    path: '/meta-tables/$tableId/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSqlsSqlIdEditRoute =
   AuthenticatedSqlsSqlIdEditRouteImport.update({
     id: '/sqls/$sqlId/edit',
@@ -279,6 +300,8 @@ export interface FileRoutesByFullPath {
   '/connections/': typeof AuthenticatedConnectionsIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/logs/': typeof AuthenticatedLogsIndexRoute
+  '/meta-records/': typeof AuthenticatedMetaRecordsIndexRoute
+  '/meta-tables/': typeof AuthenticatedMetaTablesIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/sqls/': typeof AuthenticatedSqlsIndexRoute
@@ -286,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/tasks/': typeof AuthenticatedTasksIndexRoute
   '/users/': typeof AuthenticatedUsersIndexRoute
   '/sqls/$sqlId/edit': typeof AuthenticatedSqlsSqlIdEditRoute
+  '/meta-tables/$tableId/': typeof AuthenticatedMetaTablesTableIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/clerk': typeof ClerkauthRouteRouteWithChildren
@@ -315,6 +339,8 @@ export interface FileRoutesByTo {
   '/connections': typeof AuthenticatedConnectionsIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
   '/logs': typeof AuthenticatedLogsIndexRoute
+  '/meta-records': typeof AuthenticatedMetaRecordsIndexRoute
+  '/meta-tables': typeof AuthenticatedMetaTablesIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/sqls': typeof AuthenticatedSqlsIndexRoute
@@ -322,6 +348,7 @@ export interface FileRoutesByTo {
   '/tasks': typeof AuthenticatedTasksIndexRoute
   '/users': typeof AuthenticatedUsersIndexRoute
   '/sqls/$sqlId/edit': typeof AuthenticatedSqlsSqlIdEditRoute
+  '/meta-tables/$tableId': typeof AuthenticatedMetaTablesTableIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -356,6 +383,8 @@ export interface FileRoutesById {
   '/_authenticated/connections/': typeof AuthenticatedConnectionsIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
+  '/_authenticated/meta-records/': typeof AuthenticatedMetaRecordsIndexRoute
+  '/_authenticated/meta-tables/': typeof AuthenticatedMetaTablesIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/sqls/': typeof AuthenticatedSqlsIndexRoute
@@ -363,6 +392,7 @@ export interface FileRoutesById {
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
   '/_authenticated/sqls/$sqlId/edit': typeof AuthenticatedSqlsSqlIdEditRoute
+  '/_authenticated/meta-tables/$tableId/': typeof AuthenticatedMetaTablesTableIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -395,6 +425,8 @@ export interface FileRouteTypes {
     | '/connections/'
     | '/help-center/'
     | '/logs/'
+    | '/meta-records/'
+    | '/meta-tables/'
     | '/models/'
     | '/settings/'
     | '/sqls/'
@@ -402,6 +434,7 @@ export interface FileRouteTypes {
     | '/tasks/'
     | '/users/'
     | '/sqls/$sqlId/edit'
+    | '/meta-tables/$tableId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/clerk'
@@ -431,6 +464,8 @@ export interface FileRouteTypes {
     | '/connections'
     | '/help-center'
     | '/logs'
+    | '/meta-records'
+    | '/meta-tables'
     | '/models'
     | '/settings'
     | '/sqls'
@@ -438,6 +473,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/users'
     | '/sqls/$sqlId/edit'
+    | '/meta-tables/$tableId'
   id:
     | '__root__'
     | '/_authenticated'
@@ -471,6 +507,8 @@ export interface FileRouteTypes {
     | '/_authenticated/connections/'
     | '/_authenticated/help-center/'
     | '/_authenticated/logs/'
+    | '/_authenticated/meta-records/'
+    | '/_authenticated/meta-tables/'
     | '/_authenticated/models/'
     | '/_authenticated/settings/'
     | '/_authenticated/sqls/'
@@ -478,6 +516,7 @@ export interface FileRouteTypes {
     | '/_authenticated/tasks/'
     | '/_authenticated/users/'
     | '/_authenticated/sqls/$sqlId/edit'
+    | '/_authenticated/meta-tables/$tableId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -658,6 +697,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLogsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/meta-records/': {
+      id: '/_authenticated/meta-records/'
+      path: '/meta-records'
+      fullPath: '/meta-records/'
+      preLoaderRoute: typeof AuthenticatedMetaRecordsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/meta-tables/': {
+      id: '/_authenticated/meta-tables/'
+      path: '/meta-tables'
+      fullPath: '/meta-tables/'
+      preLoaderRoute: typeof AuthenticatedMetaTablesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/models/': {
       id: '/_authenticated/models/'
       path: '/models'
@@ -756,6 +809,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClerkAuthenticatedUserManagementRouteImport
       parentRoute: typeof ClerkAuthenticatedRouteRoute
     }
+    '/_authenticated/meta-tables/$tableId/': {
+      id: '/_authenticated/meta-tables/$tableId/'
+      path: '/meta-tables/$tableId'
+      fullPath: '/meta-tables/$tableId/'
+      preLoaderRoute: typeof AuthenticatedMetaTablesTableIdIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/sqls/$sqlId/edit': {
       id: '/_authenticated/sqls/$sqlId/edit'
       path: '/sqls/$sqlId/edit'
@@ -800,12 +860,15 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedConnectionsIndexRoute: typeof AuthenticatedConnectionsIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
   AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
+  AuthenticatedMetaRecordsIndexRoute: typeof AuthenticatedMetaRecordsIndexRoute
+  AuthenticatedMetaTablesIndexRoute: typeof AuthenticatedMetaTablesIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedSqlsIndexRoute: typeof AuthenticatedSqlsIndexRoute
   AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedSqlsSqlIdEditRoute: typeof AuthenticatedSqlsSqlIdEditRoute
+  AuthenticatedMetaTablesTableIdIndexRoute: typeof AuthenticatedMetaTablesTableIdIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -819,12 +882,16 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedConnectionsIndexRoute: AuthenticatedConnectionsIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
   AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
+  AuthenticatedMetaRecordsIndexRoute: AuthenticatedMetaRecordsIndexRoute,
+  AuthenticatedMetaTablesIndexRoute: AuthenticatedMetaTablesIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedSqlsIndexRoute: AuthenticatedSqlsIndexRoute,
   AuthenticatedSystemIndexRoute: AuthenticatedSystemIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
   AuthenticatedSqlsSqlIdEditRoute: AuthenticatedSqlsSqlIdEditRoute,
+  AuthenticatedMetaTablesTableIdIndexRoute:
+    AuthenticatedMetaTablesTableIdIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

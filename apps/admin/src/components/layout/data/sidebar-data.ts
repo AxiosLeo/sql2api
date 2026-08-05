@@ -7,6 +7,8 @@ import {
   FileCode2,
   ScrollText,
   Settings2,
+  Layers3,
+  Rows3,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
 
@@ -51,6 +53,21 @@ export const sidebarData: SidebarData = {
           title: 'SQL APIs',
           url: '/sqls',
           icon: FileCode2,
+        },
+      ],
+    },
+    {
+      title: 'Meta2API',
+      items: [
+        {
+          title: 'Tables',
+          url: '/meta-tables',
+          icon: Layers3,
+        },
+        {
+          title: 'Records',
+          url: '/meta-records',
+          icon: Rows3,
         },
       ],
     },

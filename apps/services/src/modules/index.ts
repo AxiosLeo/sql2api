@@ -9,6 +9,7 @@ import {
   openApiDirectRouter
 } from './docs/docs.router';
 import invokeRouter from './invoke/invoke.router';
+import metaRouter from './meta/meta.router';
 import modelRouter from './model/model.router';
 import settingRouter from './setting/setting.router';
 import sqlRouter from './sql/sql.router';
@@ -51,6 +52,7 @@ logged.add(invokeRouter);
 // Stats / settings are dashboard-only: intentionally not mounted on /openapi.
 logged.add(statRouter);
 logged.add(settingRouter);
+logged.add(metaRouter);
 logged.add(openApiAdminRouter);
 adminApi.add(logged);
 

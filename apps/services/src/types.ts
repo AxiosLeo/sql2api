@@ -136,3 +136,89 @@ export const SQL_TYPE_TO_METHOD: Record<SqlType, HttpMethod> = {
   update: 'PATCH',
   complex: 'POST'
 };
+
+/** All Meta2API field types (13). System built-ins are also types. */
+export const META_FIELD_TYPES = [
+  'text',
+  'number',
+  'single_select',
+  'multi_select',
+  'datetime',
+  'created_by',
+  'updated_by',
+  'created_at',
+  'updated_at',
+  'one_way_link',
+  'two_way_link',
+  'parent_record',
+  'attachment'
+] as const;
+
+export type MetaFieldType = (typeof META_FIELD_TYPES)[number];
+
+/** Field types that users can create manually (excludes system built-ins). */
+export const META_USER_FIELD_TYPES = [
+  'text',
+  'number',
+  'single_select',
+  'multi_select',
+  'datetime',
+  'one_way_link',
+  'two_way_link',
+  'parent_record',
+  'attachment'
+] as const;
+
+export type MetaUserFieldType = (typeof META_USER_FIELD_TYPES)[number];
+
+export const META_SYSTEM_FIELD_TYPES = [
+  'created_by',
+  'updated_by',
+  'created_at',
+  'updated_at'
+] as const;
+
+export type MetaSystemFieldType = (typeof META_SYSTEM_FIELD_TYPES)[number];
+
+/** validatorjs `in:` rule fragment for meta field type. */
+export const META_FIELD_TYPE_IN_RULE = META_FIELD_TYPES.join(',');
+
+/** validatorjs `in:` for user-creatable field types. */
+export const META_USER_FIELD_TYPE_IN_RULE = META_USER_FIELD_TYPES.join(',');
+
+export type MetaTableStatus = 'active' | 'disabled';
+
+export type MetaShardStatus = 'active' | 'sealed';
+
+/** Default capacity (record count) for a cell shard table. */
+export const META_SHARD_DEFAULT_CAPACITY = 100_000;
+
+export type MetaLinkFilterOp = 'eq' | 'neq' | 'in' | 'contains';
+
+export const META_LINK_FILTER_OPS = [
+  'eq',
+  'neq',
+  'in',
+  'contains'
+] as const;
+
+export interface MetaLinkFilter {
+  /** Target table meta_fields.id */
+  field_id: string;
+  op: MetaLinkFilterOp;
+  /** eq/neq/contains: scalar; in: non-empty array */
+  value: unknown;
+}
+
+export interface MetaFieldConfig {
+  options?: string[];
+  format?: string;
+  target_table_id?: string;
+  reverse_field_id?: string;
+  /** Allow multiple values for link/attachment. Default true. */
+  multiple?: boolean;
+  /** Link association scope. Default 'all'. */
+  link_scope?: 'all' | 'filter';
+  /** AND filters when link_scope === 'filter'. */
+  filters?: MetaLinkFilter[];
+}

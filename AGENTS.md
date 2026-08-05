@@ -5,7 +5,7 @@
 ## 目录结构
 
 - `apps/services` — 后端 API 服务（@axiosleo/koapp，默认端口 13334）
-  - `src/modules/` — 业务模块：admin、app、connection、model、sql、invoke、stat、docs
+  - `src/modules/` — 业务模块：admin、app、connection、model、sql、invoke、stat、docs、meta（Meta2API）
   - `src/middlewares/` — `auth.ts`（Bearer Api-Key）、`admin-auth.ts`（Session）
   - `src/services/` — 共享服务：`sqlite.ts`（元数据库）、`datasource.ts`（客户库连接）、`ai.ts`（本地 LLM）、`retention.ts`（日志清理）、`openapi-spec.ts`（OpenAPI 合并与动态生成）、`openapi-specs/`（手写模块规范片段）
 - `apps/admin` — 管理台（React 19 + Vite + TanStack Router/Query + shadcn/ui）
