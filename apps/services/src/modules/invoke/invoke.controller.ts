@@ -143,6 +143,19 @@ export class InvokeController extends BaseController {
         }
       }
 
+      if (record!.mock_enabled) {
+        let mockData: Record<string, unknown> = {};
+        try {
+          const parsed = JSON.parse(record!.mock_data_json || '{}') as unknown;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            mockData = parsed as Record<string, unknown>;
+          }
+        } catch {
+          this.error(500, 'Invalid Mock Data');
+        }
+        this.success(mockData);
+      }
+
       const config = getConnectionConfig(appId, record!.connection_id);
       if (!config) {
         this.error(404, 'Not Found Connection');
