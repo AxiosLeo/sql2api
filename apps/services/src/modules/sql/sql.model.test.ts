@@ -3,13 +3,17 @@ import { HttpError } from '@axiosleo/koapp';
 import { splitSqlStatements } from '../../services/sql-text';
 import {
   analyzeSql,
+  assertMockPayload,
   detectSqlType,
   extractTableNames,
   mergeReviewResults,
+  normalizeMockFields,
   parserDatabase,
   replaceNamedParamsForParse,
-  staticAuditSql
+  staticAuditSql,
+  toSqlItem
 } from './sql.model';
+import type { SqlRecord } from '../../services/sqlite';
 import {
   DATASOURCE_PROTOCOLS,
   DATASOURCE_TYPES,
@@ -397,5 +401,66 @@ describe('sql.model mergeReviewResults', () => {
     });
     assert.strictEqual(result.passed, true);
     assert.strictEqual(result.issues.length, 1);
+  });
+});
+
+describe('normalizeMockFields / assertMockPayload', () => {
+  it('serializes plain mock_data objects', () => {
+    const result = normalizeMockFields({
+      mock_enabled: true,
+      mock_data: { rows: [{ id: 1 }], row_count: 1 }
+    });
+    assert.ok(result);
+    assert.strictEqual(result!.mock_enabled, true);
+    assert.strictEqual(
+      result!.mock_data_json,
+      JSON.stringify({ rows: [{ id: 1 }], row_count: 1 })
+    );
+  });
+
+  it('rejects array or null mock_data', () => {
+    assert.strictEqual(
+      normalizeMockFields({ mock_enabled: true, mock_data: [] }),
+      null
+    );
+    assert.strictEqual(
+      normalizeMockFields({ mock_enabled: true, mock_data: null }),
+      null
+    );
+  });
+
+  it('allows enabling only when payload is a JSON object', () => {
+    assert.strictEqual(assertMockPayload(true, '{}'), true);
+    assert.strictEqual(assertMockPayload(true, '[]'), false);
+    assert.strictEqual(assertMockPayload(true, 'not-json'), false);
+    assert.strictEqual(assertMockPayload(false, 'not-json'), true);
+  });
+});
+
+describe('toSqlItem mock fields', () => {
+  it('maps mock_enabled and mock_data from the record', () => {
+    const record: SqlRecord = {
+      id: 'sql-1',
+      app_id: 'app-1',
+      connection_id: 'conn-1',
+      name: 'get-user',
+      description: '',
+      sql_text: 'SELECT 1',
+      sql_type: 'select',
+      method: 'GET',
+      params_json: '[]',
+      status: 'enabled',
+      review_json: '{"passed":true,"issues":[]}',
+      mock_enabled: 1,
+      mock_data_json: '{"rows":[{"id":1}],"row_count":1}',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z'
+    };
+    const item = toSqlItem(record);
+    assert.strictEqual(item.mock_enabled, true);
+    assert.deepStrictEqual(item.mock_data, {
+      rows: [{ id: 1 }],
+      row_count: 1
+    });
   });
 });

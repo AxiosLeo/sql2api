@@ -5,6 +5,7 @@ import { BaseController } from '../controller';
 import type {
   ApplyReviewBody,
   CreateSqlBody,
+  GenerateMockBody,
   GenerateNameBody,
   GenerateResult,
   GenerateSqlBody,
@@ -15,8 +16,10 @@ import type {
 } from './sql.model';
 import {
   analyzeSql,
+  assertMockPayload,
   extractTableNames,
   mergeReviewResults,
+  normalizeMockFields,
   staticAuditSql,
   toSqlItem
 } from './sql.model';
@@ -29,7 +32,13 @@ import type {
   SqlStatus
 } from '../../types';
 import type { GenerateProgressEvent, ModelContext } from '../../services/ai';
-import { applyReviewSuggestions, generateApiName, generateSQLPipeline, reviewSQL } from '../../services/ai';
+import {
+  applyReviewSuggestions,
+  generateApiName,
+  generateMockData,
+  generateSQLPipeline,
+  reviewSQL
+} from '../../services/ai';
 import {
   createSql,
   deleteSql,
@@ -334,6 +343,27 @@ export class SqlController extends BaseController {
     }
 
     try {
+      const mockFields = normalizeMockFields({
+        mock_enabled: body.mock_enabled,
+        mock_data: body.mock_data
+      });
+      if (mockFields === null) {
+        this.failed(
+          { mock_data: ['mock_data must be a JSON object'] },
+          '400;Bad Data',
+          400
+        );
+      }
+      const mock_enabled = mockFields!.mock_enabled ?? false;
+      const mock_data_json = mockFields!.mock_data_json ?? '{}';
+      if (!assertMockPayload(mock_enabled, mock_data_json)) {
+        this.failed(
+          { mock_data: ['mock_data is required when mock_enabled is true'] },
+          '400;Bad Data',
+          400
+        );
+      }
+
       const record = createSql({
         app_id: conn!.app_id,
         connection_id: body.connection_id,
@@ -344,7 +374,9 @@ export class SqlController extends BaseController {
         method: analysis.method,
         params: body.params || [],
         review,
-        status: targetStatus
+        status: targetStatus,
+        mock_enabled,
+        mock_data_json
       });
       this.success(toSqlItem(record));
     } catch (err) {
@@ -384,6 +416,37 @@ export class SqlController extends BaseController {
         params: body.params
       });
       this.success({ name });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        this.error(err.status || 500, err.message);
+      }
+      throw err;
+    }
+  }
+
+  async generateMock(context: KoaContext) {
+    const appId = this.appId(context);
+    const body = context.body as GenerateMockBody;
+    const conn = getConnection(appId, body.connection_id);
+    if (!conn) {
+      this.error(404, 'Not Found Connection');
+    }
+
+    const analysis = analyzeSql(body.sql, conn!.type);
+    const models = this.loadModelContexts(
+      appId,
+      body.connection_id,
+      body.model_ids
+    );
+
+    try {
+      const mock_data = await generateMockData({
+        sql: body.sql,
+        sql_type: analysis.sql_type,
+        dialect: conn!.type,
+        models
+      });
+      this.success({ mock_data, sql_type: analysis.sql_type });
     } catch (err) {
       if (err instanceof HttpError) {
         this.error(err.status || 500, err.message);
@@ -656,6 +719,34 @@ export class SqlController extends BaseController {
     }
 
     try {
+      const mockFields = normalizeMockFields({
+        mock_enabled: body.mock_enabled,
+        mock_data: body.mock_data
+      });
+      if (mockFields === null) {
+        this.failed(
+          { mock_data: ['mock_data must be a JSON object'] },
+          '400;Bad Data',
+          400
+        );
+      }
+
+      const nextMockEnabled =
+        mockFields!.mock_enabled !== undefined
+          ? mockFields!.mock_enabled
+          : !!existing!.mock_enabled;
+      const nextMockDataJson =
+        mockFields!.mock_data_json !== undefined
+          ? mockFields!.mock_data_json
+          : existing!.mock_data_json || '{}';
+      if (!assertMockPayload(nextMockEnabled, nextMockDataJson)) {
+        this.failed(
+          { mock_data: ['mock_data is required when mock_enabled is true'] },
+          '400;Bad Data',
+          400
+        );
+      }
+
       const record = updateSql(appId, id, {
         connection_id: body.connection_id,
         name: body.name,
@@ -671,7 +762,9 @@ export class SqlController extends BaseController {
             : undefined,
         params: body.params,
         review,
-        status: body.status
+        status: body.status,
+        mock_enabled: mockFields!.mock_enabled,
+        mock_data_json: mockFields!.mock_data_json
       });
       if (!record) {
         this.error(404, 'Not Found SQL');
