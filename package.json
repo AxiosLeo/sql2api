@@ -12,11 +12,14 @@
     "pnpm": ">=9"
   },
   "scripts": {
+    "dev:admin": "pnpm --dir apps/admin dev",
+    "dev:services": "pnpm --dir apps/services dev",
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
     "clean": "pnpm -r run clean"
   },
+
   "devDependencies": {
     "typescript": "^5.8.3"
   },

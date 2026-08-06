@@ -8,4 +8,4 @@ allowBuilds:
   better-sqlite3: true
   '@clerk/shared': true
   esbuild: false
-  oracledb: set this to true or false
+  oracledb: true
