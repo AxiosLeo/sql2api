@@ -56,9 +56,19 @@ export function createSqlsColumns(
         <DataTableColumnHeader column={column} title='Name' />
       ),
       cell: ({ row }) => (
-        <LongText className='max-w-48 font-medium'>
-          {row.getValue('name')}
-        </LongText>
+        <div className='flex max-w-48 items-center gap-1.5'>
+          <LongText className='max-w-40 font-medium'>
+            {row.getValue('name')}
+          </LongText>
+          {row.original.mock_enabled ? (
+            <Badge
+              variant='outline'
+              className='shrink-0 border-sky-300 bg-sky-100/50 text-sky-900 dark:text-sky-200'
+            >
+              Mock
+            </Badge>
+          ) : null}
+        </div>
       ),
       enableHiding: false,
     },

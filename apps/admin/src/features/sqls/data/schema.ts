@@ -63,6 +63,8 @@ export const sqlSchema = z.object({
   params: z.array(sqlParamSchema),
   status: sqlStatusSchema,
   review: reviewResultSchema,
+  mock_enabled: z.boolean().optional().default(false),
+  mock_data: z.record(z.string(), z.unknown()).optional().default({}),
   created_at: z.string(),
   updated_at: z.string(),
 })

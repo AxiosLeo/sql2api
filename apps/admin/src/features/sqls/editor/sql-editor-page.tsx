@@ -18,6 +18,7 @@ import { listModels } from '@/api/models'
 import {
   applySqlReview,
   createSql,
+  generateSqlMock,
   generateSqlName,
   generateSqlStream,
   GenerateSqlStreamError,
@@ -76,10 +77,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { datasourceProtocol } from '@/lib/datasource'
 import { formatSql } from '@/lib/format-sql'
 import { AiGeneratePanel } from './ai-generate-panel'
+import { MockDataCard } from './mock-data-card'
 import { ParamsCard } from './params-card'
 import { ReviewCard } from './review-card'
 import {
+  DEFAULT_MOCK_DATA,
   formSchema,
+  formatMockDataJson,
   type AiMeta,
   type SqlEditorForm,
 } from './types'
@@ -179,6 +183,8 @@ export function SqlEditorPage({
       sql: '',
       params: [],
       status: 'enabled',
+      mock_enabled: false,
+      mock_data: DEFAULT_MOCK_DATA,
     },
   })
 
@@ -191,6 +197,8 @@ export function SqlEditorPage({
   const sqlValue = form.watch('sql')
   const statusValue = form.watch('status')
   const nameValue = form.watch('name')
+  const mockEnabled = form.watch('mock_enabled')
+  const mockDataValue = form.watch('mock_data')
   const isDirty = form.formState.isDirty
 
   const needsReview = useMemo(() => {
@@ -238,7 +246,7 @@ export function SqlEditorPage({
     queryKey: ['models', { connection_id: connectionId, size: 100 }],
     queryFn: () =>
       listModels({ connection_id: connectionId, page: 1, size: 100 }),
-    enabled: !!connectionId && sqlTab === 'ai',
+    enabled: !!connectionId && (sqlTab === 'ai' || mockEnabled),
   })
 
   useEffect(() => {
@@ -254,6 +262,8 @@ export function SqlEditorPage({
         sql: initial.sql,
         params: mapParamsToForm(initial.params),
         status: initial.status,
+        mock_enabled: !!initial.mock_enabled,
+        mock_data: formatMockDataJson(initial.mock_data),
       })
       setReview(initial.review)
       if (initial.review?.passed && initial.status !== 'draft') {
@@ -276,6 +286,8 @@ export function SqlEditorPage({
         sql: '',
         params: [],
         status: 'enabled',
+        mock_enabled: false,
+        mock_data: DEFAULT_MOCK_DATA,
       })
       setReview(null)
       setReviewedFor(null)
@@ -301,6 +313,22 @@ export function SqlEditorPage({
         description: p.description || undefined,
         default: p.default?.trim() ? p.default : undefined,
       }))
+      let mock_data: Record<string, unknown> = {}
+      try {
+        const parsed = JSON.parse(values.mock_data || '{}') as unknown
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          mock_data = parsed as Record<string, unknown>
+        } else if (values.mock_enabled) {
+          throw new Error('Mock data must be a JSON object.')
+        }
+      } catch (err) {
+        if (values.mock_enabled) {
+          throw err instanceof Error
+            ? err
+            : new Error('Mock data must be valid JSON.')
+        }
+        mock_data = {}
+      }
       if (isEdit && sqlId) {
         return updateSql(sqlId, {
           connection_id: values.connection_id,
@@ -309,6 +337,8 @@ export function SqlEditorPage({
           sql: values.sql,
           params,
           status: values.status,
+          mock_enabled: values.mock_enabled,
+          mock_data,
         })
       }
       return createSql({
@@ -318,6 +348,8 @@ export function SqlEditorPage({
         sql: values.sql,
         params,
         status: values.status === 'draft' ? 'draft' : 'enabled',
+        mock_enabled: values.mock_enabled,
+        mock_data,
       })
     },
     onSuccess: (_data, values) => {
@@ -491,6 +523,63 @@ export function SqlEditorPage({
       toast.error(message)
     },
   })
+
+  const mockGenMutation = useMutation({
+    mutationFn: () => {
+      if (!connectionId) throw new Error('Connection is required.')
+      if (!sqlValue.trim()) throw new Error('SQL is required.')
+      return generateSqlMock({
+        connection_id: connectionId,
+        sql: sqlValue.trim(),
+        model_ids:
+          selectedModelIds.size > 0
+            ? Array.from(selectedModelIds)
+            : undefined,
+      })
+    },
+    onSuccess: (result) => {
+      form.setValue('mock_data', formatMockDataJson(result.mock_data), {
+        shouldValidate: true,
+        shouldDirty: true,
+      })
+      form.setValue('mock_enabled', true, {
+        shouldValidate: true,
+        shouldDirty: true,
+      })
+      toast.success('Mock data generated.')
+    },
+    onError: (err) => {
+      if (err instanceof Error && !(err instanceof AxiosError)) {
+        toast.error(err.message)
+        return
+      }
+      if (err instanceof AxiosError && err.response?.status === 503) {
+        toast.error(
+          (err.response?.data as { message?: string })?.message ||
+            'AI service unavailable. Check AI provider configuration.'
+        )
+        return
+      }
+      const message =
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string })?.message || err.message
+          : 'Failed to generate mock data.'
+      toast.error(message)
+    },
+  })
+
+  const formatMockData = () => {
+    try {
+      const parsed = JSON.parse(mockDataValue || '{}') as unknown
+      form.setValue('mock_data', formatMockDataJson(parsed), {
+        shouldValidate: true,
+        shouldDirty: true,
+      })
+      toast.success('JSON formatted')
+    } catch {
+      toast.error('Invalid JSON. Fix syntax before formatting.')
+    }
+  }
 
   const reviewMutation = useMutation({
     mutationFn: () => {
@@ -880,6 +969,16 @@ export function SqlEditorPage({
                     })
                   }
                   onRemove={remove}
+                />
+
+                <MockDataCard
+                  control={form.control}
+                  mockEnabled={mockEnabled}
+                  mockData={mockDataValue}
+                  canGenerate={!!connectionId && !!sqlValue.trim()}
+                  generating={mockGenMutation.isPending}
+                  onFormat={formatMockData}
+                  onGenerate={() => mockGenMutation.mutate()}
                 />
               </div>
 

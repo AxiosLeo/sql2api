@@ -38,6 +38,8 @@ export interface SqlItem {
   params: SqlParamDef[]
   status: SqlStatus
   review: ReviewResult
+  mock_enabled: boolean
+  mock_data: Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -65,6 +67,8 @@ export interface CreateSqlBody {
   sql: string
   params?: SqlParamDef[]
   status?: 'enabled' | 'draft'
+  mock_enabled?: boolean
+  mock_data?: Record<string, unknown>
 }
 
 export interface UpdateSqlBody {
@@ -74,6 +78,8 @@ export interface UpdateSqlBody {
   sql?: string
   params?: SqlParamDef[]
   status?: SqlStatus
+  mock_enabled?: boolean
+  mock_data?: Record<string, unknown>
 }
 
 export interface GenerateSqlBody {
@@ -183,6 +189,28 @@ export function generateSqlName(
   return apiRequest<{ name: string }>({
     method: 'POST',
     url: '/api/sqls/generate-name',
+    data: body,
+    timeout: 120_000,
+  })
+}
+
+export interface GenerateMockBody {
+  connection_id: string
+  sql: string
+  model_ids?: string[]
+}
+
+export interface GenerateMockResult {
+  mock_data: Record<string, unknown>
+  sql_type: SqlType
+}
+
+export function generateSqlMock(
+  body: GenerateMockBody
+): Promise<GenerateMockResult> {
+  return apiRequest<GenerateMockResult>({
+    method: 'POST',
+    url: '/api/sqls/generate-mock',
     data: body,
     timeout: 120_000,
   })
