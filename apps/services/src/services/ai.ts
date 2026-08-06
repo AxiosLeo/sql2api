@@ -195,6 +195,58 @@ const NAME_SCHEMA = {
   required: ['name']
 } as const;
 
+const MOCK_ROW_SCHEMA = {
+  type: 'object',
+  additionalProperties: {
+    type: ['string', 'number', 'boolean', 'null']
+  }
+} as const;
+
+const MOCK_SELECT_SCHEMA = {
+  type: 'object',
+  properties: {
+    rows: {
+      type: 'array',
+      items: MOCK_ROW_SCHEMA
+    },
+    row_count: { type: 'integer' }
+  },
+  required: ['rows', 'row_count']
+} as const;
+
+const MOCK_WRITE_SCHEMA = {
+  type: 'object',
+  properties: {
+    affected_rows: { type: 'integer' },
+    insert_id: { type: 'integer' }
+  },
+  required: ['affected_rows']
+} as const;
+
+const MOCK_COMPLEX_SCHEMA = {
+  type: 'object',
+  properties: {
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['query', 'execute'] },
+          rows: {
+            type: 'array',
+            items: MOCK_ROW_SCHEMA
+          },
+          row_count: { type: 'integer' },
+          affected_rows: { type: 'integer' },
+          insert_id: { type: 'integer' }
+        },
+        required: ['kind']
+      }
+    }
+  },
+  required: ['results']
+} as const;
+
 const PLAN_SCHEMA = {
   type: 'object',
   properties: {
@@ -979,6 +1031,117 @@ export async function generateApiName(input: {
       throw new HttpError(422, 'AI did not produce a usable name');
     }
     return name;
+  } catch (err) {
+    if (err instanceof HttpError) {
+      throw err;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    throw new HttpError(503, `AI Service Unavailable: ${message}`);
+  }
+}
+
+export interface GenerateMockDataInput {
+  sql: string;
+  sql_type: SqlType;
+  dialect?: DatasourceType;
+  models?: ModelContext[];
+}
+
+function mockSchemaForSqlType(sqlType: SqlType) {
+  if (sqlType === 'select') {
+    return MOCK_SELECT_SCHEMA;
+  }
+  if (sqlType === 'complex') {
+    return MOCK_COMPLEX_SCHEMA;
+  }
+  return MOCK_WRITE_SCHEMA;
+}
+
+function shapeHintForSqlType(sqlType: SqlType): string {
+  if (sqlType === 'select') {
+    return 'Return { "rows": [ ...row objects... ], "row_count": <number> }. Include 2-5 realistic sample rows. row_count must equal rows.length.';
+  }
+  if (sqlType === 'complex') {
+    return 'Return { "results": [ ... ] } where each item is either { "kind": "query", "rows": [...], "row_count": n } or { "kind": "execute", "affected_rows": n, "insert_id"?: n }.';
+  }
+  if (sqlType === 'insert') {
+    return 'Return { "affected_rows": 1, "insert_id": <positive integer> }.';
+  }
+  return 'Return { "affected_rows": <positive integer> }.';
+}
+
+/**
+ * Generate mock invoke payload from SQL + table models.
+ * Shape matches real invoke success data for the given sql_type.
+ */
+export async function generateMockData(
+  input: GenerateMockDataInput
+): Promise<Record<string, unknown>> {
+  const reason = aiUnavailableReason();
+  if (reason) {
+    throw new HttpError(503, `AI Service Unavailable: ${reason}`);
+  }
+
+  const sql = (input.sql || '').trim();
+  if (!sql) {
+    throw new HttpError(400, 'sql is required');
+  }
+
+  const sqlType = normalizeSqlType(input.sql_type);
+  const dialect = input.dialect || 'mysql';
+
+  try {
+    const systemPrompt = [
+      'You generate realistic mock API response data for a SQL-to-API gateway.',
+      `Target dialect: ${dialectLabel(dialect)}.`,
+      `SQL type: ${sqlType}.`,
+      shapeHintForSqlType(sqlType),
+      'Use column names and types from the provided table models when possible.',
+      'Values must look realistic (names, emails, dates as ISO strings, ids as integers).',
+      'Do not invent SQL. Return ONLY JSON matching the schema.'
+    ].join(' ');
+
+    const userPrompt = [
+      'SQL:',
+      sql,
+      '',
+      'Table models:',
+      formatModelsContext(input.models)
+    ].join('\n');
+
+    const raw = await runWithGrammar<Record<string, unknown>>(
+      systemPrompt,
+      userPrompt,
+      mockSchemaForSqlType(sqlType),
+      { maxTokens: 1024 }
+    );
+
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw new HttpError(422, 'AI did not produce usable mock data');
+    }
+
+    if (sqlType === 'select') {
+      const rows = Array.isArray(raw.rows) ? raw.rows : [];
+      return {
+        rows,
+        row_count:
+          typeof raw.row_count === 'number' ? raw.row_count : rows.length
+      };
+    }
+    if (sqlType === 'complex') {
+      return {
+        results: Array.isArray(raw.results) ? raw.results : []
+      };
+    }
+    const affected =
+      typeof raw.affected_rows === 'number' ? raw.affected_rows : 1;
+    const result: Record<string, unknown> = { affected_rows: affected };
+    if (typeof raw.insert_id === 'number') {
+      result.insert_id = raw.insert_id;
+    } else if (sqlType === 'insert') {
+      result.insert_id = 1;
+    }
+    return result;
   } catch (err) {
     if (err instanceof HttpError) {
       throw err;
