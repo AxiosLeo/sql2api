@@ -31,6 +31,7 @@ import { Route as AuthenticatedChatsIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedConnectionsIndexRouteImport } from './routes/_authenticated/connections/index'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
+import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
@@ -159,6 +160,11 @@ const AuthenticatedHelpCenterIndexRoute =
     path: '/help-center/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedLogsIndexRoute = AuthenticatedLogsIndexRouteImport.update({
+  id: '/logs/',
+  path: '/logs/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedModelsIndexRoute =
   AuthenticatedModelsIndexRouteImport.update({
     id: '/models/',
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/chats/': typeof AuthenticatedChatsIndexRoute
   '/connections/': typeof AuthenticatedConnectionsIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
+  '/logs/': typeof AuthenticatedLogsIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/sqls/': typeof AuthenticatedSqlsIndexRoute
@@ -307,6 +314,7 @@ export interface FileRoutesByTo {
   '/chats': typeof AuthenticatedChatsIndexRoute
   '/connections': typeof AuthenticatedConnectionsIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
+  '/logs': typeof AuthenticatedLogsIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/sqls': typeof AuthenticatedSqlsIndexRoute
@@ -347,6 +355,7 @@ export interface FileRoutesById {
   '/_authenticated/chats/': typeof AuthenticatedChatsIndexRoute
   '/_authenticated/connections/': typeof AuthenticatedConnectionsIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
+  '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/sqls/': typeof AuthenticatedSqlsIndexRoute
@@ -385,6 +394,7 @@ export interface FileRouteTypes {
     | '/chats/'
     | '/connections/'
     | '/help-center/'
+    | '/logs/'
     | '/models/'
     | '/settings/'
     | '/sqls/'
@@ -420,6 +430,7 @@ export interface FileRouteTypes {
     | '/chats'
     | '/connections'
     | '/help-center'
+    | '/logs'
     | '/models'
     | '/settings'
     | '/sqls'
@@ -459,6 +470,7 @@ export interface FileRouteTypes {
     | '/_authenticated/chats/'
     | '/_authenticated/connections/'
     | '/_authenticated/help-center/'
+    | '/_authenticated/logs/'
     | '/_authenticated/models/'
     | '/_authenticated/settings/'
     | '/_authenticated/sqls/'
@@ -639,6 +651,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHelpCenterIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/logs/': {
+      id: '/_authenticated/logs/'
+      path: '/logs'
+      fullPath: '/logs/'
+      preLoaderRoute: typeof AuthenticatedLogsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/models/': {
       id: '/_authenticated/models/'
       path: '/models'
@@ -780,6 +799,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChatsIndexRoute: typeof AuthenticatedChatsIndexRoute
   AuthenticatedConnectionsIndexRoute: typeof AuthenticatedConnectionsIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
+  AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedSqlsIndexRoute: typeof AuthenticatedSqlsIndexRoute
   AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute
@@ -798,6 +818,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChatsIndexRoute: AuthenticatedChatsIndexRoute,
   AuthenticatedConnectionsIndexRoute: AuthenticatedConnectionsIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
+  AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedSqlsIndexRoute: AuthenticatedSqlsIndexRoute,
   AuthenticatedSystemIndexRoute: AuthenticatedSystemIndexRoute,
