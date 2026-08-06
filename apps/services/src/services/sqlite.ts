@@ -179,6 +179,8 @@ CREATE TABLE IF NOT EXISTS sqls (
   params_json TEXT NOT NULL DEFAULT '[]',
   status TEXT NOT NULL DEFAULT 'enabled' CHECK(status IN ('enabled', 'disabled', 'draft')),
   review_json TEXT NOT NULL DEFAULT '{}',
+  mock_enabled INTEGER NOT NULL DEFAULT 0,
+  mock_data_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE,
@@ -277,6 +279,9 @@ export interface SqlRecord {
   params_json: string;
   status: SqlStatus;
   review_json: string;
+  /** SQLite INTEGER 0/1 */
+  mock_enabled: number;
+  mock_data_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -398,6 +403,8 @@ export interface CreateSqlInput {
   params?: SqlParamDef[];
   review?: ReviewResult;
   status?: SqlStatus;
+  mock_enabled?: boolean;
+  mock_data_json?: string;
 }
 
 export interface UpdateSqlInput {
@@ -410,6 +417,8 @@ export interface UpdateSqlInput {
   params?: SqlParamDef[];
   review?: ReviewResult;
   status?: SqlStatus;
+  mock_enabled?: boolean;
+  mock_data_json?: string;
 }
 
 export interface ListOptions {
@@ -507,6 +516,7 @@ export function getDB(): SqliteDatabase {
   migrateSqlsTypeCheck(db);
   migrateSqlsStatusCheck(db);
   migrateConnectionsTypeCheck(db);
+  migrateSqlsMockColumns(db);
 
   dbInstance = db;
   dbPathResolved = resolved;
@@ -520,6 +530,19 @@ function migrateInvokeLogsParams(db: SqliteDatabase): void {
   }>;
   if (!columns.some((col) => col.name === 'params')) {
     db.exec('ALTER TABLE invoke_logs ADD COLUMN params TEXT');
+  }
+}
+
+/** Add mock columns to existing sqls tables created before mock data support. */
+function migrateSqlsMockColumns(db: SqliteDatabase): void {
+  const columns = db.prepare('PRAGMA table_info(sqls)').all() as Array<{
+    name: string;
+  }>;
+  if (!columns.some((col) => col.name === 'mock_enabled')) {
+    db.exec('ALTER TABLE sqls ADD COLUMN mock_enabled INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!columns.some((col) => col.name === 'mock_data_json')) {
+    db.exec("ALTER TABLE sqls ADD COLUMN mock_data_json TEXT NOT NULL DEFAULT '{}'");
   }
 }
 
@@ -1153,16 +1176,18 @@ export function createSql(input: CreateSqlInput): SqlRecord {
     params_json: JSON.stringify(input.params || []),
     status: input.status || 'enabled',
     review_json: JSON.stringify(input.review || { passed: true, issues: [] }),
+    mock_enabled: input.mock_enabled ? 1 : 0,
+    mock_data_json: input.mock_data_json ?? '{}',
     created_at: now,
     updated_at: now
   };
   getDB().prepare(
     `INSERT INTO sqls
      (id, app_id, connection_id, name, description, sql_text, sql_type, method,
-      params_json, status, review_json, created_at, updated_at)
+      params_json, status, review_json, mock_enabled, mock_data_json, created_at, updated_at)
      VALUES
      (@id, @app_id, @connection_id, @name, @description, @sql_text, @sql_type, @method,
-      @params_json, @status, @review_json, @created_at, @updated_at)`
+      @params_json, @status, @review_json, @mock_enabled, @mock_data_json, @created_at, @updated_at)`
   ).run(row);
   return row;
 }
@@ -1256,6 +1281,13 @@ export function updateSql(
       ? JSON.stringify(input.review)
       : existing.review_json,
     status: input.status ?? existing.status,
+    mock_enabled:
+      input.mock_enabled !== undefined
+        ? input.mock_enabled
+          ? 1
+          : 0
+        : existing.mock_enabled,
+    mock_data_json: input.mock_data_json ?? existing.mock_data_json,
     updated_at: nowISO()
   };
 
@@ -1265,7 +1297,8 @@ export function updateSql(
          connection_id = @connection_id, name = @name, description = @description,
          sql_text = @sql_text, sql_type = @sql_type, method = @method,
          params_json = @params_json, review_json = @review_json,
-         status = @status, updated_at = @updated_at
+         status = @status, mock_enabled = @mock_enabled,
+         mock_data_json = @mock_data_json, updated_at = @updated_at
        WHERE id = @id AND app_id = @app_id`
     ).run(updated);
   } else {
@@ -1274,7 +1307,8 @@ export function updateSql(
          connection_id = @connection_id, name = @name, description = @description,
          sql_text = @sql_text, sql_type = @sql_type, method = @method,
          params_json = @params_json, review_json = @review_json,
-         status = @status, updated_at = @updated_at
+         status = @status, mock_enabled = @mock_enabled,
+         mock_data_json = @mock_data_json, updated_at = @updated_at
        WHERE id = @id`
     ).run(updated);
   }
