@@ -55,6 +55,8 @@ export interface SqlItem {
   params: SqlParamDef[];
   status: SqlStatus;
   review: ReviewResult;
+  mock_enabled: boolean;
+  mock_data: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -67,6 +69,8 @@ export interface CreateSqlBody {
   params?: SqlParamDef[];
   /** Create as draft to skip review gate; defaults to enabled. */
   status?: 'enabled' | 'draft';
+  mock_enabled?: boolean;
+  mock_data?: Record<string, unknown>;
 }
 
 export interface UpdateSqlBody {
@@ -76,6 +80,8 @@ export interface UpdateSqlBody {
   sql?: string;
   params?: SqlParamDef[];
   status?: SqlStatus;
+  mock_enabled?: boolean;
+  mock_data?: Record<string, unknown>;
 }
 
 export interface GenerateSqlBody {
@@ -103,6 +109,12 @@ export interface GenerateNameBody {
   prompt?: string;
   sql?: string;
   params?: string[];
+}
+
+export interface GenerateMockBody {
+  connection_id: string;
+  sql: string;
+  model_ids?: string[];
 }
 
 export interface ReviewSqlBody {
@@ -139,7 +151,8 @@ export const createSqlRules = {
   'params.*.name': 'required|string',
   'params.*.rule': 'required|string',
   'params.*.description': 'string',
-  status: 'in:enabled,draft'
+  status: 'in:enabled,draft',
+  mock_enabled: 'boolean'
 };
 
 export const updateSqlRules = {
@@ -151,7 +164,8 @@ export const updateSqlRules = {
   'params.*.name': 'required|string',
   'params.*.rule': 'required|string',
   'params.*.description': 'string',
-  status: 'in:enabled,disabled,draft'
+  status: 'in:enabled,disabled,draft',
+  mock_enabled: 'boolean'
 };
 
 export const generateSqlRules = {
@@ -166,6 +180,13 @@ export const generateNameRules = {
   sql: 'string',
   params: 'array',
   'params.*': 'string'
+};
+
+export const generateMockRules = {
+  connection_id: 'required|string',
+  sql: 'required|string',
+  model_ids: 'array',
+  'model_ids.*': 'string'
 };
 
 export const reviewSqlRules = {
@@ -229,6 +250,7 @@ export interface SqlAnalysis {
 export function toSqlItem(record: SqlRecord): SqlItem {
   let params: SqlParamDef[] = [];
   let review: ReviewResult = { passed: true, issues: [] };
+  let mock_data: Record<string, unknown> = {};
   try {
     params = JSON.parse(record.params_json || '[]') as SqlParamDef[];
   } catch {
@@ -245,6 +267,14 @@ export function toSqlItem(record: SqlRecord): SqlItem {
   } catch {
     review = { passed: true, issues: [] };
   }
+  try {
+    const parsed = JSON.parse(record.mock_data_json || '{}') as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      mock_data = parsed as Record<string, unknown>;
+    }
+  } catch {
+    mock_data = {};
+  }
 
   return {
     id: record.id,
@@ -259,9 +289,60 @@ export function toSqlItem(record: SqlRecord): SqlItem {
     params,
     status: record.status,
     review,
+    mock_enabled: !!record.mock_enabled,
+    mock_data,
     created_at: record.created_at,
     updated_at: record.updated_at
   };
+}
+
+/**
+ * Validate and serialize mock fields for persistence.
+ * Returns null when mock_data is present but not a plain object.
+ * Omits keys that were not provided so update can leave them unchanged.
+ */
+export function normalizeMockFields(input: {
+  mock_enabled?: boolean;
+  mock_data?: unknown;
+}): { mock_enabled?: boolean; mock_data_json?: string } | null {
+  const result: { mock_enabled?: boolean; mock_data_json?: string } = {};
+
+  if (input.mock_enabled !== undefined) {
+    result.mock_enabled = !!input.mock_enabled;
+  }
+
+  if (input.mock_data !== undefined) {
+    if (
+      input.mock_data === null
+      || typeof input.mock_data !== 'object'
+      || Array.isArray(input.mock_data)
+    ) {
+      return null;
+    }
+    try {
+      result.mock_data_json = JSON.stringify(input.mock_data);
+    } catch {
+      return null;
+    }
+  }
+
+  return result;
+}
+
+/** Ensure enabled mock has a non-empty JSON object payload. */
+export function assertMockPayload(
+  mock_enabled: boolean,
+  mock_data_json: string
+): boolean {
+  if (!mock_enabled) {
+    return true;
+  }
+  try {
+    const parsed = JSON.parse(mock_data_json || '{}') as unknown;
+    return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
 }
 
 /**
