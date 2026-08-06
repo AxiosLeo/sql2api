@@ -229,6 +229,56 @@ describe('sqlite service', function () {
     assert.ok(removeApp(app.id));
   });
 
+  it('persists mock_enabled and mock_data_json on sqls', () => {
+    const app = createApp('mock-sql-app');
+    const conn = createConnection({
+      app_id: app.id,
+      name: 'mock-mysql',
+      type: 'mysql',
+      host: '127.0.0.1',
+      port: 3306,
+      username: 'root',
+      password: 'x',
+      database: 'demo'
+    });
+
+    const mockPayload = {
+      rows: [{ id: 1, name: 'Ada' }],
+      row_count: 1
+    };
+    const sql = createSql({
+      app_id: app.id,
+      connection_id: conn.id,
+      name: 'mock-get-user',
+      sql_text: 'SELECT id, name FROM users WHERE id = :id',
+      sql_type: 'select',
+      method: 'GET',
+      params: [{ name: 'id', rule: 'required|integer' }],
+      mock_enabled: true,
+      mock_data_json: JSON.stringify(mockPayload)
+    });
+    assert.strictEqual(sql.mock_enabled, 1);
+    assert.strictEqual(sql.mock_data_json, JSON.stringify(mockPayload));
+
+    const found = getSql(app.id, sql.id);
+    assert.ok(found);
+    assert.strictEqual(found!.mock_enabled, 1);
+    assert.deepStrictEqual(JSON.parse(found!.mock_data_json), mockPayload);
+
+    const updated = updateSql(app.id, sql.id, {
+      mock_enabled: false,
+      mock_data_json: JSON.stringify({ rows: [], row_count: 0 })
+    });
+    assert.strictEqual(updated!.mock_enabled, 0);
+    assert.deepStrictEqual(JSON.parse(updated!.mock_data_json), {
+      rows: [],
+      row_count: 0
+    });
+
+    assert.ok(deleteSql(app.id, sql.id));
+    assert.ok(removeApp(app.id));
+  });
+
   it('supports draft status on sqls', () => {
     const app = createApp('draft-app');
     const conn = createConnection({
