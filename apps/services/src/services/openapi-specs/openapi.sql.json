@@ -309,6 +309,65 @@
         }
       }
     },
+    "/openapi/sqls/generate-mock": {
+      "post": {
+        "tags": [
+          "Sqls"
+        ],
+        "summary": "AI 生成模拟数据",
+        "description": "根据 SQL 与数据模型表结构生成符合 invoke 响应形态的模拟 JSON，不落库。",
+        "operationId": "generateSqlMock",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateMockBody"
+              },
+              "example": {
+                "connection_id": "550e8400-e29b-41d4-a716-446655440000",
+                "sql": "SELECT id, name, email FROM users WHERE id = :id",
+                "model_ids": [
+                  "550e8400-e29b-41d4-a716-446655440001"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "生成成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateMockResultResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
     "/openapi/sqls/review": {
       "post": {
         "tags": [
@@ -855,6 +914,15 @@
               "draft"
             ],
             "description": "创建为 draft 可跳过审计门禁暂存；默认 enabled"
+          },
+          "mock_enabled": {
+            "type": "boolean",
+            "description": "开启后 invoke 返回 mock_data，不执行 SQL"
+          },
+          "mock_data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "模拟响应 payload，形态与真实 invoke data 一致"
           }
         }
       },
@@ -888,6 +956,15 @@
               "disabled",
               "draft"
             ]
+          },
+          "mock_enabled": {
+            "type": "boolean",
+            "description": "开启后 invoke 返回 mock_data，不执行 SQL"
+          },
+          "mock_data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "模拟响应 payload，形态与真实 invoke data 一致"
           }
         }
       },
@@ -988,6 +1065,8 @@
           "params",
           "status",
           "review",
+          "mock_enabled",
+          "mock_data",
           "created_at",
           "updated_at"
         ],
@@ -1050,6 +1129,15 @@
           },
           "review": {
             "$ref": "#/components/schemas/ReviewResult"
+          },
+          "mock_enabled": {
+            "type": "boolean",
+            "description": "开启后 invoke 返回 mock_data，不执行 SQL"
+          },
+          "mock_data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "模拟响应 payload"
           },
           "created_at": {
             "type": "string",
@@ -1157,6 +1245,53 @@
           }
         }
       },
+      "GenerateMockBody": {
+        "type": "object",
+        "required": [
+          "connection_id",
+          "sql"
+        ],
+        "properties": {
+          "connection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sql": {
+            "type": "string"
+          },
+          "model_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "可选，过滤参与上下文的模型 id"
+          }
+        }
+      },
+      "GenerateMockResult": {
+        "type": "object",
+        "required": [
+          "mock_data",
+          "sql_type"
+        ],
+        "properties": {
+          "mock_data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "模拟 invoke 响应 payload"
+          },
+          "sql_type": {
+            "type": "string",
+            "enum": [
+              "select",
+              "insert",
+              "update",
+              "complex"
+            ]
+          }
+        }
+      },
       "SqlListData": {
         "type": "object",
         "required": [
@@ -1260,6 +1395,21 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/GenerateNameResult"
+              }
+            }
+          }
+        ]
+      },
+      "GenerateMockResultResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEnvelopeBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/GenerateMockResult"
               }
             }
           }

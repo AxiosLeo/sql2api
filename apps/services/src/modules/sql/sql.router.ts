@@ -3,6 +3,7 @@ import controller from './sql.controller';
 import {
   applyReviewRules,
   createSqlRules,
+  generateMockRules,
   generateNameRules,
   generateSqlRules,
   reviewSqlRules,
@@ -27,6 +28,10 @@ router.post('/generate/stream', (ctx) => controller.generateStream(ctx), {
 
 router.post('/generate-name', (ctx) => controller.generateName(ctx), {
   body: { rules: generateNameRules }
+});
+
+router.post('/generate-mock', (ctx) => controller.generateMock(ctx), {
+  body: { rules: generateMockRules }
 });
 
 router.post('/review', (ctx) => controller.review(ctx), {
