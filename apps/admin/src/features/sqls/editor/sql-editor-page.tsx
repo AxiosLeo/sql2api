@@ -313,7 +313,9 @@ export function SqlEditorPage({
         description: p.description || undefined,
         default: p.default?.trim() ? p.default : undefined,
       }))
-      let mock_data: Record<string, unknown> = {}
+      // When mock is off and the staged text is not a valid JSON object,
+      // omit mock_data so the backend keeps the previously stored payload.
+      let mock_data: Record<string, unknown> | undefined
       try {
         const parsed = JSON.parse(values.mock_data || '{}') as unknown
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -327,7 +329,6 @@ export function SqlEditorPage({
             ? err
             : new Error('Mock data must be valid JSON.')
         }
-        mock_data = {}
       }
       if (isEdit && sqlId) {
         return updateSql(sqlId, {
