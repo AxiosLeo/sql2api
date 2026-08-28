@@ -2,17 +2,28 @@
 
 [English](./README.md) | **简体中文**
 
-将已注册的 SQL 语句转换为基于 MySQL / PostgreSQL 协议兼容库、Oracle、SQL Server 的、带鉴权的 HTTP API。
+让 SQL 变成带鉴权的 HTTP API —— SQL 本身也可以交给 AI 来写。用自然语言描述需求，schema-aware 的 Text-to-SQL 流水线即可生成 SQL、从正确性 / 性能 / 安全三个维度审查、为接口命名，甚至生成 Mock 响应数据。支持 MySQL / PostgreSQL（及协议兼容库）、Oracle、SQL Server。
 
-创建应用、添加数据库连接、用命名参数注册 SQL，即可通过 `/openapi/invoke/{uuid}` 调用 —— 可选 Admin Console，以及用于 SQL 生成/审查的本地 LLM。
+创建应用、添加数据库连接、用命名参数注册 SQL（手写或 AI 生成），即可通过 `/openapi/invoke/{uuid}` 调用 —— 可选 Admin Console 管理后台。所有 AI 推理都在本地 GGUF 模型或私有 Ollama 上完成，表结构与 SQL 不出内网。
+
+## AI 亮点
+
+- **Text-to-SQL 流水线，而非一次性补全** — plan（AI 挑选相关表）→ generate → 参数对齐 → 自动修复，通过 SSE 实时流式展示进度
+- **Schema-aware 生成** — 以已同步的表/字段元数据（类型、约束、注释）为上下文；大库场景先由 planner 收窄到相关表，再注入完整 schema
+- **生成即可用** — 产出的 SQL 自带 `:name` 命名参数、校验规则、正确的 HTTP 方法映射，以及 kebab-case 接口命名建议
+- **双层审查 + 一键修复** — 静态审计硬性拦截 `DROP` / `DELETE` / `TRUNCATE`，LLM 审查标出正确性、性能与安全问题并附可应用的修复建议（`apply-review` 自动改写 SQL）；只有通过审查的 SQL 才能启用
+- **AI Mock 数据** — 生成与真实 invoke 响应结构一致的 Mock 数据，数据库尚未就绪时也能先行联调
+- **本地优先，隐私可控** — 本地 GGUF（`node-llama-cpp`）或自托管 Ollama；可在管理台运行时切换 provider，无需重启
 
 ## 功能特性
 
 - **SQL → HTTP API** — 注册一次 SQL，通过 Bearer Api-Key 调用。方法映射：`SELECT` → `GET`、`INSERT` → `POST`、`UPDATE` → `PATCH`、多语句 / `CALL` → `complex`（`POST`）。静态审计禁止 `DROP` / `DELETE` / `TRUNCATE`
+- **AI 生成 SQL**（可选）— 自然语言 → 匹配方言的 SQL，附带参数、校验规则与接口命名（见 [AI 亮点](#ai-亮点)）
+- **AI 审查 SQL**（可选）— 静态审计 + LLM 审查语法、性能与安全，修复建议支持一键应用
+- **AI 命名与 Mock**（可选）— kebab-case 接口命名建议，以及与 invoke 响应同构的 Mock 数据
 - **应用与 Api-Key 管理** — 多租户应用，密钥格式 `sk2a_…`（明文仅在创建时展示一次）
 - **连接管理** — 支持 MySQL / PostgreSQL 及协议兼容库（MariaDB、TiDB、OceanBase、Doris、StarRocks、CockroachDB、YugabyteDB、openGauss、KingbaseES），以及 Oracle、SQL Server；密码使用 AES-256-GCM 加密存储
-- **模型元数据** — 同步表/字段信息，供 AI 上下文与文档使用
-- **AI 辅助 SQL**（可选）— 通过 `node-llama-cpp` 加载本地 GGUF 模型，支持生成与审查（语法、性能与安全）
+- **模型元数据** — 同步表/字段信息 —— 既是 Text-to-SQL 的 schema 上下文，也用于文档生成
 - **调用日志** — 请求历史记录，支持按保留天数自动清理
 - **Admin Console** — React 管理后台：应用、连接、模型、SQL API、调用日志
 - **CLI** — `sql2api app` / `sql2api apikey`，便于脚本化运维
@@ -40,7 +51,7 @@ flowchart LR
   API[services :13334]
   Meta[(SQLite 元数据)]
   DB[(MySQL / PG / Oracle / SQL Server)]
-  LLM[本地 GGUF LLM]
+  LLM[本地 GGUF / Ollama]
 
   Client -->|"Bearer Api-Key /openapi/*"| API
   Admin -->|"Session Cookie /api/*"| API
@@ -154,7 +165,7 @@ Admin Vite 环境变量（`apps/admin/.env.example`）：
 2. **创建 Api-Key**（`sk2a_…`）— 请妥善保存，明文仅展示一次
 3. **添加连接** — 对接 MySQL 或 PostgreSQL
 4. **（可选）同步模型** — 拉取表/字段元数据
-5. **注册 SQL** — 使用命名参数（如 `:id`、`:name`）
+5. **注册 SQL** — 使用命名参数（如 `:id`、`:name`）；可手写，也可用 AI 从自然语言生成
 6. **调用** — 请求 `/openapi/invoke/{uuid}`，并携带 `Authorization: Bearer <api-key>`
 
 ### 示例：调用 SELECT 类 SQL
@@ -224,14 +235,35 @@ curl -H 'Authorization: Bearer sk2a_...' http://127.0.0.1:13334/openapi.json
 
 ## AI 功能（可选）
 
-下载 Qwen2.5-Coder GGUF 模型并写入 `LLAMA_MODEL_PATH`：
+所有 AI 能力都运行在本地 GGUF 模型或私有 Ollama 上 —— 数据不出内网。AI 完全可选：未配置 provider 时，生成类接口返回 503，审查则优雅降级为仅静态审计。
+
+### 能力清单
+
+| 能力 | 接口 | 说明 |
+|------|------|------|
+| Text-to-SQL | `POST /openapi/sqls/generate`（SSE：`…/generate/stream`） | 自然语言 + 连接（可选勾选表）→ SQL、`sql_type`、带校验规则的命名参数、解释说明与接口命名建议。多步流水线：plan → generate → 参数对齐 → 修复 |
+| SQL 审查 | `POST /openapi/sqls/review` | 静态审计 + LLM 审查（正确性 / 性能 / 安全），返回按严重程度分级的问题与修复建议 |
+| 应用修复 | `POST /openapi/sqls/apply-review` | 按选中的审查问题自动改写 SQL |
+| 命名建议 | `POST /openapi/sqls/generate-name` | 根据描述和/或 SQL 生成 kebab-case 接口名 |
+| Mock 数据 | `POST /openapi/sqls/generate-mock` | 生成与真实 invoke 响应同构的 Mock 数据；SQL 开启 mock 模式后直接返回 |
+
+管理台 SQL 编辑器已内置全部能力：「Generate with AI」标签页实时展示流水线进度，Review 面板支持逐条 Apply，Name 旁有 AI 命名按钮，另有 Mock Data 卡片。
+
+### 配置方式
+
+**方式 A — 本地 GGUF 模型**（通过 `node-llama-cpp`）：
 
 ```bash
-# 预设：qwen2.5-coder-1.5b | qwen2.5-coder-3b（默认） | qwen2.5-coder-7b
+# 预设：qwen2.5-coder-1.5b | qwen2.5-coder-3b（默认） | qwen2.5-coder-7b | qwen3.8-27b
+# 镜像：ModelScope（默认）或 hf-mirror（--mirror hf）；自定义模型用 --url
 bash scripts/download-model.sh qwen2.5-coder-3b --set-env
 ```
 
-然后重启 services。SQL 生成（`POST …/sqls/generate`）与审查（`POST …/sqls/review`）即可使用。
+然后重启 services。
+
+**方式 B — 私有 Ollama**：设置 `AI_PROVIDER=ollama` 及 `OLLAMA_BASE_URL` / `OLLAMA_MODEL`（见[配置项](#配置项)）。
+
+两种 provider 也可在管理台 **System Settings** 中运行时配置（存入 SQLite，优先级高于环境变量，改完即生效，并内置连通性测试）。
 
 ## CLI
 
