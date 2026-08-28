@@ -8,6 +8,7 @@
 #   qwen2.5-coder-1.5b   ~1.1GB  (low-resource)
 #   qwen2.5-coder-3b     ~2GB    (default, SQL quality/size balance)
 #   qwen2.5-coder-7b     ~4.7GB  (higher quality, multi-shard)
+#   qwen3.8-27b          ~15.3GB (Qwen3.8-27B Unsloth UD-Q4_K_M)
 #
 # Options:
 #   --url <gguf-url>     Custom GGUF URL (overrides preset)
@@ -52,9 +53,12 @@ preset_files() {
       echo "qwen2.5-coder-7b-instruct-q4_k_m-00001-of-00002.gguf"
       echo "qwen2.5-coder-7b-instruct-q4_k_m-00002-of-00002.gguf"
       ;;
+    qwen3.8-27b)
+      echo "Qwen3.8-27B-UD-Q4_K_M.gguf"
+      ;;
     *)
       echo "Unknown preset: $1" >&2
-      echo "Available: qwen2.5-coder-1.5b, qwen2.5-coder-3b, qwen2.5-coder-7b" >&2
+      echo "Available: qwen2.5-coder-1.5b, qwen2.5-coder-3b, qwen2.5-coder-7b, qwen3.8-27b" >&2
       exit 1
       ;;
   esac
@@ -65,6 +69,7 @@ preset_repo() {
     qwen2.5-coder-1.5b) echo "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF" ;;
     qwen2.5-coder-3b)   echo "Qwen/Qwen2.5-Coder-3B-Instruct-GGUF" ;;
     qwen2.5-coder-7b)   echo "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF" ;;
+    qwen3.8-27b)        echo "unsloth/Qwen3.8-27B-GGUF" ;;
   esac
 }
 
