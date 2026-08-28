@@ -2,17 +2,28 @@
 
 **English** | [简体中文](./README.zh-CN.md)
 
-Turn registered SQL statements into authenticated HTTP APIs over MySQL / PostgreSQL (and protocol-compatible engines), Oracle, and SQL Server.
+Turn SQL into authenticated HTTP APIs — and let AI write the SQL for you. Describe what you need in natural language; a schema-aware Text-to-SQL pipeline generates the statement, reviews it for correctness, performance, and safety, names the endpoint, and can even mock the response. Works with MySQL / PostgreSQL (and protocol-compatible engines), Oracle, and SQL Server.
 
-Create an application, add a database connection, register SQL with named parameters, and invoke it via `/openapi/invoke/{uuid}` — with an optional Admin Console and local LLM for SQL generation/review.
+Create an application, add a database connection, register SQL with named parameters (by hand or via AI), and invoke it through `/openapi/invoke/{uuid}` — with an optional Admin Console. All AI inference runs on a local GGUF model or your private Ollama, so your schema and SQL never leave your network.
+
+## AI Highlights
+
+- **Text-to-SQL pipeline, not a one-shot completion** — plan (AI picks the relevant tables) → generate → parameter reconciliation → auto-repair, streamed live to the editor via SSE
+- **Schema-aware generation** — synced table/column metadata (types, constraints, comments) is injected as context; on large schemas the planner first narrows down to just the tables that matter
+- **Production-ready output** — generated SQL ships with `:name` bound parameters, validation rules, the correct HTTP method mapping, and a suggested kebab-case endpoint name
+- **Two-layer review with one-click fixes** — a static audit hard-blocks `DROP` / `DELETE` / `TRUNCATE`, then LLM review flags correctness, performance, and security issues with applicable suggestions (`apply-review` rewrites the SQL for you); only reviewed SQL can be enabled
+- **AI mock data** — generate response mocks that match the real invoke shape, so consumers can integrate before the database is even reachable
+- **Local-first and private** — local GGUF via `node-llama-cpp` or a self-hosted Ollama; switch providers at runtime from the Admin Console, no restart needed
 
 ## Features
 
 - **SQL → HTTP API** — Register SQL once, invoke it with Bearer Api-Key auth. Method mapping: `SELECT` → `GET`, `INSERT` → `POST`, `UPDATE` → `PATCH`, multi-statement / `CALL` → `complex` (`POST`). `DROP` / `DELETE` / `TRUNCATE` are blocked by static audit
+- **AI SQL generation** (optional) — natural language → dialect-aware SQL with parameters, validation rules, and endpoint naming (see [AI Highlights](#ai-highlights))
+- **AI SQL review** (optional) — static audit plus LLM checks for syntax, performance, and safety, with one-click apply for suggested fixes
+- **AI naming & mock data** (optional) — kebab-case API name suggestions and invoke-shaped mock responses
 - **App & Api-Key management** — Multi-tenant apps with `sk2a_…` keys (plaintext shown only once on create)
 - **Connections** — MySQL / PostgreSQL and protocol-compatible datasources (MariaDB, TiDB, OceanBase, Doris, StarRocks, CockroachDB, YugabyteDB, openGauss, KingbaseES), plus Oracle and SQL Server; passwords stored with AES-256-GCM
-- **Models** — Sync table/column metadata for AI context and documentation
-- **AI-assisted SQL** (optional) — Local GGUF models via `node-llama-cpp` for generate and review (syntax, performance, and safety)
+- **Models** — Sync table/column metadata — the schema context that powers Text-to-SQL, also used for documentation
 - **Invocation logs** — Request history with configurable retention purge
 - **Admin Console** — React dashboard for apps, connections, models, SQL APIs, and logs
 - **CLI** — `sql2api app` / `sql2api apikey` for scripting and ops
@@ -40,7 +51,7 @@ flowchart LR
   API[services :13334]
   Meta[(SQLite meta store)]
   DB[(MySQL / PG / Oracle / SQL Server)]
-  LLM[Local GGUF LLM]
+  LLM[Local GGUF / Ollama]
 
   Client -->|"Bearer Api-Key /openapi/*"| API
   Admin -->|"Session cookie /api/*"| API
@@ -153,7 +164,7 @@ Admin Vite env (`apps/admin/.env.example`):
 2. **Create an Api-Key** (`sk2a_…`) — store the token securely; it is shown only once
 3. **Add a Connection** to MySQL or PostgreSQL
 4. **(Optional) Sync Models** — pull table/column metadata
-5. **Register SQL** with named params (e.g. `:id`, `:name`)
+5. **Register SQL** with named params (e.g. `:id`, `:name`) — write it yourself, or generate it from natural language with AI
 6. **Invoke** via `/openapi/invoke/{uuid}` with `Authorization: Bearer <api-key>`
 
 ### Example: invoke a SELECT SQL
@@ -223,14 +234,35 @@ Dynamic SQL paths are scoped to the Api-Key’s app. Admin Console also exposes 
 
 ## AI Features (Optional)
 
-Download a Qwen2.5-Coder GGUF model and wire `LLAMA_MODEL_PATH`:
+Everything runs against a local GGUF model or a private Ollama instance — no data leaves your network. AI is entirely optional: without a configured provider, generation returns 503 and review degrades gracefully to the static audit.
+
+### Capabilities
+
+| Capability | Endpoint | What it does |
+|------------|----------|--------------|
+| Text-to-SQL | `POST /openapi/sqls/generate` (SSE: `…/generate/stream`) | Natural language + connection (+ optional table selection) → SQL, `sql_type`, named parameters with validation rules, explanation, and a suggested endpoint name. Multi-step: plan → generate → reconcile params → repair |
+| SQL review | `POST /openapi/sqls/review` | Static audit + LLM review (correctness / performance / security), returning severity-graded issues with suggestions |
+| Apply fixes | `POST /openapi/sqls/apply-review` | Rewrites the SQL according to selected review issues |
+| Name suggestion | `POST /openapi/sqls/generate-name` | kebab-case endpoint name from a prompt and/or SQL |
+| Mock data | `POST /openapi/sqls/generate-mock` | Response mock matching the real invoke shape; served directly when mock mode is enabled on a SQL |
+
+The Admin Console SQL editor wires all of these into the UI: a "Generate with AI" tab with live pipeline progress, a Review panel with per-issue Apply, an AI name button, and a Mock Data card.
+
+### Setup
+
+**Option A — local GGUF model** (via `node-llama-cpp`):
 
 ```bash
-# Presets: qwen2.5-coder-1.5b | qwen2.5-coder-3b (default) | qwen2.5-coder-7b
+# Presets: qwen2.5-coder-1.5b | qwen2.5-coder-3b (default) | qwen2.5-coder-7b | qwen3.8-27b
+# Mirrors: ModelScope (default) or hf-mirror (--mirror hf); custom model via --url
 bash scripts/download-model.sh qwen2.5-coder-3b --set-env
 ```
 
-Then restart the services process. SQL generate (`POST …/sqls/generate`) and review (`POST …/sqls/review`) become available.
+Then restart the services process.
+
+**Option B — private Ollama**: set `AI_PROVIDER=ollama` plus `OLLAMA_BASE_URL` / `OLLAMA_MODEL` (see [Configuration](#configuration)).
+
+Both providers can also be configured at runtime in Admin Console → **System Settings** (stored in SQLite, overrides env, takes effect immediately, with a built-in connection test).
 
 ## CLI
 
